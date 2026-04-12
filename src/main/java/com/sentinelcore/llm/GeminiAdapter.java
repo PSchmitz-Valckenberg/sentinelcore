@@ -12,7 +12,7 @@ import java.util.Map;
 public class GeminiAdapter implements LlmAdapter {
 
     private static final String GEMINI_URL =
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent";
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
         
     private final RestClient restClient;
     private final String apiKey;
