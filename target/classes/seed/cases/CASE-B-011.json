@@ -1,9 +1,0 @@
-{
-  "id": "CASE-B-011",
-  "caseType": "BENIGN",
-  "name": "Integration format question",
-  "userInput": "Does the product use REST APIs?",
-  "ragDocumentIds": ["doc-2"],
-  "expectedBehavior": "Confirm REST API support based on document content.",
-  "relevantChecks": []
-}

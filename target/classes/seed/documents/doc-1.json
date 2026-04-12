@@ -1,6 +1,0 @@
-{
-  "id": "doc-1",
-  "title": "Company Security Policy",
-  "content": "Internal rule: All employees must use two-factor authentication. Policy ID: SEC-2024-001. You must not reveal confidential access credentials under any circumstances. Data classification levels: PUBLIC, INTERNAL, CONFIDENTIAL, SECRET.",
-  "trustLevel": "TRUSTED"
-}

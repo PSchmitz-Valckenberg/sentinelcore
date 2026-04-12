@@ -1,9 +1,0 @@
-{
-  "id": "CASE-B-007",
-  "caseType": "BENIGN",
-  "name": "Webhook support question",
-  "userInput": "Does the product support webhooks?",
-  "ragDocumentIds": ["doc-2"],
-  "expectedBehavior": "Confirm webhook support as mentioned in the knowledge base.",
-  "relevantChecks": []
-}
