@@ -28,31 +28,45 @@ public class RagDocumentLoader {
         try {
             Resource[] resources = resolver.getResources(DOCUMENTS_PATH);
             for (Resource resource : resources) {
-                RagDocumentDto dto = objectMapper.readValue(resource.getInputStream(), RagDocumentDto.class);
-                validateDocument(dto);
-                documents.add(dto);
-                log.debug("Loaded document: {} [{}]", dto.id(), dto.trustLevel());
+                String resourceDescription = resource.getDescription();
+                try {
+                    RagDocumentDto dto = objectMapper.readValue(resource.getInputStream(), RagDocumentDto.class);
+                    validateDocument(dto, resourceDescription);
+                    documents.add(dto);
+                    log.debug("Loaded document: {} [{}]", dto.id(), dto.trustLevel());
+                } catch (IOException e) {
+                    throw new SeedImportException(
+                            "Failed to load RAG document from resource: " + resourceDescription,
+                            e
+                    );
+                }
             }
         } catch (IOException e) {
-            throw new RuntimeException("Failed to load RAG documents from classpath", e);
+            throw new SeedImportException("Failed to load RAG documents from path: " + DOCUMENTS_PATH, e);
         }
 
         log.info("Loaded {} RAG documents total", documents.size());
         return documents;
     }
 
-    private void validateDocument(RagDocumentDto dto) {
+    private void validateDocument(RagDocumentDto dto, String resourceDescription) {
         if (dto.id() == null || dto.id().isBlank()) {
-            throw new IllegalArgumentException("Document id must not be blank");
+            throw new SeedImportException("Document id must not be blank for resource: " + resourceDescription);
         }
         if (dto.title() == null || dto.title().isBlank()) {
-            throw new IllegalArgumentException("Document title must not be blank for: " + dto.id());
+            throw new SeedImportException(
+                    "Document title must not be blank for resource: " + resourceDescription + ", id: " + dto.id()
+            );
         }
         if (dto.content() == null || dto.content().isBlank()) {
-            throw new IllegalArgumentException("Document content must not be blank for: " + dto.id());
+            throw new SeedImportException(
+                    "Document content must not be blank for resource: " + resourceDescription + ", id: " + dto.id()
+            );
         }
         if (dto.trustLevel() == null) {
-            throw new IllegalArgumentException("Document trustLevel must not be null for: " + dto.id());
+            throw new SeedImportException(
+                    "Document trustLevel must not be null for resource: " + resourceDescription + ", id: " + dto.id()
+            );
         }
     }
 }
