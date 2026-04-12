@@ -48,6 +48,10 @@ public class EvaluationCaseLoader {
                 throw new SeedImportException(
                     "Failed to load evaluation case from resource: " + describeResource(resource), e
                 );
+            } catch (RuntimeException e) {
+                throw new SeedImportException(
+                    "Failed to validate evaluation case from resource: " + describeResource(resource), e
+                );
             }
         }
 
