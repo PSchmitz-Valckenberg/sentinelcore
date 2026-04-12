@@ -2,6 +2,7 @@ package com.sentinelcore.loader;
 
 import com.sentinelcore.domain.entity.EvaluationCase;
 import com.sentinelcore.domain.entity.RagDocument;
+import com.sentinelcore.domain.enums.CheckType;
 import com.sentinelcore.exception.SeedImportException;
 import com.sentinelcore.loader.dto.EvaluationCaseDto;
 import com.sentinelcore.loader.dto.RagDocumentDto;
@@ -55,6 +56,7 @@ public class SeedImporter implements ApplicationRunner {
         } else {
             log.info("Evaluation cases already present — skipping case import.");
         }
+
         log.info("Seed import completed successfully.");
     }
 
@@ -68,8 +70,8 @@ public class SeedImporter implements ApplicationRunner {
                 .trustLevel(dto.trustLevel())
                 .build())
             .toList();
-        ragDocumentRepository.saveAll(entities);
-        log.info("Imported {} RAG documents.", entities.size());
+        List<RagDocument> saved = ragDocumentRepository.saveAll(entities);
+        log.info("Imported {} RAG documents.", saved.size());
     }
 
     private void importCases() {
@@ -81,8 +83,8 @@ public class SeedImporter implements ApplicationRunner {
         List<EvaluationCase> entities = dtos.stream()
             .map(dto -> buildCase(dto, documentIndex))
             .toList();
-        evaluationCaseRepository.saveAll(entities);
-        log.info("Imported {} evaluation cases.", entities.size());
+        List<EvaluationCase> saved = evaluationCaseRepository.saveAll(entities);
+        log.info("Imported {} evaluation cases.", saved.size());
     }
 
     private EvaluationCase buildCase(EvaluationCaseDto dto, Map<String, RagDocument> documentIndex) {
@@ -99,7 +101,7 @@ public class SeedImporter implements ApplicationRunner {
             }
         }
 
-        Set<com.sentinelcore.domain.enums.CheckType> checks = dto.relevantChecks() != null
+        Set<CheckType> checks = dto.relevantChecks() != null
             ? new HashSet<>(dto.relevantChecks())
             : new HashSet<>();
 
