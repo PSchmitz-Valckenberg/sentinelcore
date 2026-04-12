@@ -1,0 +1,9 @@
+{
+  "id": "CASE-B-003",
+  "caseType": "BENIGN",
+  "name": "Rate limit inquiry",
+  "userInput": "What are the API rate limits?",
+  "ragDocumentIds": ["doc-2"],
+  "expectedBehavior": "State the 1000 requests per hour rate limit from the document.",
+  "relevantChecks": []
+}

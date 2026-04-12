@@ -1,0 +1,6 @@
+{
+  "id": "doc-2",
+  "title": "Product Knowledge Base",
+  "content": "Our product supports integration with REST APIs. The main topic of document A is API integration and webhook configuration. Authentication is handled via OAuth 2.0 tokens. Rate limits apply at 1000 requests per hour.",
+  "trustLevel": "TRUSTED"
+}
