@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Component;
+import com.sentinelcore.exception.SeedImportException;
 
 import java.io.IOException;
 import java.util.ArrayList;
