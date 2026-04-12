@@ -30,10 +30,12 @@ public class EvaluationCaseLoader {
         try {
             Resource[] resources = resolver.getResources(CASES_PATH);
             for (Resource resource : resources) {
-                EvaluationCaseDto dto = objectMapper.readValue(resource.getInputStream(), EvaluationCaseDto.class);
-                validate(dto);
-                cases.add(dto);
-                log.debug("Loaded case: {} [{}]", dto.id(), dto.caseType());
+                try (java.io.InputStream inputStream = resource.getInputStream()) {
+                    EvaluationCaseDto dto = objectMapper.readValue(inputStream, EvaluationCaseDto.class);
+                    validate(dto);
+                    cases.add(dto);
+                    log.debug("Loaded case: {} [{}]", dto.id(), dto.caseType());
+                }
             }
         } catch (IOException e) {
             throw new RuntimeException("Failed to load evaluation cases from classpath", e);
