@@ -27,24 +27,41 @@ public class EvaluationCaseLoader {
         List<EvaluationCaseDto> cases = new ArrayList<>();
         PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
 
+        Resource[] resources;
         try {
-            Resource[] resources = resolver.getResources(CASES_PATH);
-            for (Resource resource : resources) {
-                try (java.io.InputStream inputStream = resource.getInputStream()) {
-                    EvaluationCaseDto dto = objectMapper.readValue(inputStream, EvaluationCaseDto.class);
-                    validate(dto);
-                    cases.add(dto);
-                    log.debug("Loaded case: {} [{}]", dto.id(), dto.caseType());
-                }
-            }
+            resources = resolver.getResources(CASES_PATH);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to load evaluation cases from classpath", e);
+            throw new InvalidCaseException(
+                "Failed to resolve evaluation cases from path: " + CASES_PATH + ". Cause: " + e.getMessage()
+            );
+        }
+
+        for (Resource resource : resources) {
+            try (java.io.InputStream inputStream = resource.getInputStream()) {
+                EvaluationCaseDto dto = objectMapper.readValue(inputStream, EvaluationCaseDto.class);
+                validate(dto);
+                cases.add(dto);
+                log.debug("Loaded case: {} [{}]", dto.id(), dto.caseType());
+            } catch (IOException e) {
+                throw new InvalidCaseException(
+                    "Failed to load evaluation case from resource: " + describeResource(resource)
+                        + ". Cause: " + e.getMessage()
+                );
+            }
         }
 
         log.info("Loaded {} evaluation cases total", cases.size());
         return cases;
     }
 
+    private String describeResource(Resource resource) {
+        String description = resource.getDescription();
+        if (description != null && !description.isBlank()) {
+            return description;
+        }
+        String filename = resource.getFilename();
+        return filename != null && !filename.isBlank() ? filename : "<unknown resource>";
+    }
     private void validate(EvaluationCaseDto dto) {
         if (dto.id() == null || dto.id().isBlank()) {
             throw new InvalidCaseException("Case id must not be blank");
