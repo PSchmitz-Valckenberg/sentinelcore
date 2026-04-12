@@ -36,14 +36,25 @@ public class SeedImporter implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         log.info("Starting seed import...");
 
-        if (ragDocumentRepository.count() > 0 || evaluationCaseRepository.count() > 0) {
+        boolean hasDocuments = ragDocumentRepository.count() > 0;
+        boolean hasCases = evaluationCaseRepository.count() > 0;
+
+        if (hasDocuments && hasCases) {
             log.info("Seed data already present — skipping import.");
             return;
         }
 
-        importDocuments();
-        importCases();
+        if (!hasDocuments) {
+            importDocuments();
+        } else {
+            log.info("RAG documents already present — skipping document import.");
+        }
 
+        if (!hasCases) {
+            importCases();
+        } else {
+            log.info("Evaluation cases already present — skipping case import.");
+        }
         log.info("Seed import completed successfully.");
     }
 
