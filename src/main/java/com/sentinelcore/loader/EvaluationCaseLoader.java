@@ -3,6 +3,7 @@ package com.sentinelcore.loader;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sentinelcore.domain.enums.EvaluationCaseType;
 import com.sentinelcore.exception.InvalidCaseException;
+import com.sentinelcore.exception.SeedImportException;
 import com.sentinelcore.loader.dto.EvaluationCaseDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +12,7 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,21 +33,20 @@ public class EvaluationCaseLoader {
         try {
             resources = resolver.getResources(CASES_PATH);
         } catch (IOException e) {
-            throw new InvalidCaseException(
-                "Failed to resolve evaluation cases from path: " + CASES_PATH + ". Cause: " + e.getMessage()
+            throw new SeedImportException(
+                "Failed to resolve evaluation cases from path: " + CASES_PATH, e
             );
         }
 
         for (Resource resource : resources) {
-            try (java.io.InputStream inputStream = resource.getInputStream()) {
+            try (InputStream inputStream = resource.getInputStream()) {
                 EvaluationCaseDto dto = objectMapper.readValue(inputStream, EvaluationCaseDto.class);
                 validate(dto);
                 cases.add(dto);
                 log.debug("Loaded case: {} [{}]", dto.id(), dto.caseType());
             } catch (IOException e) {
-                throw new InvalidCaseException(
-                    "Failed to load evaluation case from resource: " + describeResource(resource)
-                        + ". Cause: " + e.getMessage()
+                throw new SeedImportException(
+                    "Failed to load evaluation case from resource: " + describeResource(resource), e
                 );
             }
         }
@@ -62,9 +63,13 @@ public class EvaluationCaseLoader {
         String filename = resource.getFilename();
         return filename != null && !filename.isBlank() ? filename : "<unknown resource>";
     }
+
     private void validate(EvaluationCaseDto dto) {
         if (dto.id() == null || dto.id().isBlank()) {
             throw new InvalidCaseException("Case id must not be blank");
+        }
+        if (dto.name() == null || dto.name().isBlank()) {
+            throw new InvalidCaseException("name must not be blank for case: " + dto.id());
         }
         if (dto.caseType() == null) {
             throw new InvalidCaseException("Case caseType must not be null for case: " + dto.id());
