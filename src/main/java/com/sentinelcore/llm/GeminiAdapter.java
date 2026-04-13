@@ -58,11 +58,12 @@ public class GeminiAdapter implements LlmAdapter {
 
         try {
             String bodyJson = objectMapper.writeValueAsString(body);
-            String url = baseUrl + "/models/" + model + ":generateContent?key=" + apiKey;
+            String url = baseUrl + "/models/" + model + ":generateContent";
 
             HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json")
+                .header("x-goog-api-key", apiKey)
                 .timeout(Duration.ofSeconds(timeoutSeconds))
                 .POST(HttpRequest.BodyPublishers.ofString(bodyJson))
                 .build();
