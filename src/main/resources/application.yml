@@ -29,7 +29,7 @@ logging:
 sentinelcore:
   llm:
     provider: gemini
-    api-key: ${LLM_API_KEY}
+    api-key: ${LLM_API_KEY:}
     model: gemini-2.0-flash
     base-url: https://generativelanguage.googleapis.com/v1
     timeout-seconds: 30
