@@ -23,3 +23,7 @@
 hs_err_pid*
 replay_pid*
 target/
+
+# Local secrets — never commit
+src/main/resources/application-local.yml
+.env
