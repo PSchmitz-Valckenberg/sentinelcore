@@ -1,8 +1,9 @@
 package com.sentinelcore.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import java.util.List;
 
 public record AskRequest(
-    @NotBlank String systemPrompt,
-    @NotBlank String userMessage
+    @NotBlank String userInput,
+    List<String> ragDocumentIds
 ) {}

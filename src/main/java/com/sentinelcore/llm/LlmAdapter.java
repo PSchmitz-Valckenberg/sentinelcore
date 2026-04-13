@@ -1,5 +1,8 @@
 package com.sentinelcore.llm;
 
+import com.sentinelcore.llm.dto.LlmRequest;
+import com.sentinelcore.llm.dto.LlmResponse;
+
 public interface LlmAdapter {
-    String ask(String systemPrompt, String userMessage);
+    LlmResponse call(LlmRequest request);
 }
