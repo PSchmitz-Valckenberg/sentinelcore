@@ -13,6 +13,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -99,7 +100,9 @@ public class GeminiAdapter implements LlmAdapter {
 
         JsonNode candidates = root.path("candidates");
         if (!candidates.isArray() || candidates.isEmpty()) {
-            String keys = root.fieldNames().toString();
+            List<String> keyList = new ArrayList<>();
+            root.fieldNames().forEachRemaining(keyList::add);
+            String keys = keyList.toString();
             boolean hasError = root.has("error");
             throw new LlmCallException(
                 "Gemini response missing candidates (keys=" + keys + ", hasError=" + hasError + ")"
