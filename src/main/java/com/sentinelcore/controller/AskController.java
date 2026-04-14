@@ -1,5 +1,7 @@
 package com.sentinelcore.controller;
 
+import com.sentinelcore.defense.DefenseResult;
+import com.sentinelcore.defense.DefenseService;
 import com.sentinelcore.domain.config.SystemPromptConfig;
 import com.sentinelcore.dto.AskRequest;
 import com.sentinelcore.dto.AskResponse;
@@ -24,6 +26,7 @@ public class AskController {
     private final LlmAdapter llmAdapter;
     private final SystemPromptConfig systemPromptConfig;
     private final RagDocumentRepository ragDocumentRepository;
+    private final DefenseService defenseService;
 
     @PostMapping("/ask")
     public ResponseEntity<AskResponse> ask(@Valid @RequestBody AskRequest request) {
@@ -38,7 +41,26 @@ public class AskController {
         LlmResponse llmResponse = llmAdapter.call(llmRequest);
         log.debug("LLM answered in {}ms", llmResponse.latencyMs());
 
-        return ResponseEntity.ok(new AskResponse(llmResponse.answer(), llmResponse.latencyMs()));
+        return ResponseEntity.ok(new AskResponse(
+            llmResponse.answer(),
+            false,
+            false,
+            List.of(),
+            llmResponse.latencyMs()
+        ));
+    }
+
+    @PostMapping("/ask-defended")
+    public ResponseEntity<AskResponse> askDefended(@Valid @RequestBody AskRequest request) {
+        List<String> ragContents = resolveRagDocuments(request.ragDocumentIds());
+        DefenseService.DefendedResponse result = defenseService.process(request.userInput(), ragContents);
+        log.debug("Defended request processed - blocked={}, refused={}, latency={}ms",
+            result.blocked(), result.refused(), result.latencyMs());
+
+        return ResponseEntity.ok(new AskResponse(
+            result.answer(), result.blocked(), result.refused(),
+            result.redactions(), result.latencyMs()
+        ));
     }
 
     private List<String> resolveRagDocuments(List<String> ids) {
