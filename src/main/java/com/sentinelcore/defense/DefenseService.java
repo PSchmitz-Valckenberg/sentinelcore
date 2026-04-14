@@ -64,6 +64,14 @@ public class DefenseService {
         return new DefendedResponse(answer, false, refused, List.of(), latency);
     }
 
+    /**
+     * Runs only the InputAnalyzer — no LLM call.
+     * Used for an early-exit before resolving RAG documents.
+     */
+    public DefenseResult checkInput(String userInput) {
+        return inputAnalyzer.analyze(userInput);
+    }
+
     public record DefendedResponse(
         String answer,
         boolean blocked,
