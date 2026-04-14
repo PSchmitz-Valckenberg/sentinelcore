@@ -21,8 +21,15 @@ public class InputAnalyzer {
         }
 
         String normalized = userInput.toLowerCase().strip();
+        java.util.List<String> inputKeywords = defenseConfig.inputKeywords();
+        if (inputKeywords == null || inputKeywords.isEmpty()) {
+            return DefenseResult.allowed();
+        }
 
-        for (String keyword : defenseConfig.inputKeywords()) {
+        for (String keyword : inputKeywords) {
+            if (keyword == null || keyword.isBlank()) {
+                continue;
+            }
             if (normalized.contains(keyword.toLowerCase())) {
                 log.debug("Input blocked - matched keyword: '{}'", keyword);
                 return DefenseResult.blocked("Matched injection keyword: " + keyword);
