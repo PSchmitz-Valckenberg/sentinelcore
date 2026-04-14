@@ -3,6 +3,7 @@ package com.sentinelcore.defense;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.List;
 import java.util.Locale;
 
 import org.springframework.stereotype.Component;
@@ -24,8 +25,8 @@ public class InputAnalyzer {
         }
 
         String normalized = userInput.toLowerCase(Locale.ROOT).strip();
-        java.util.List<String> inputKeywords = defenseConfig.inputKeywords();
-        if (inputKeywords == null || inputKeywords.isEmpty()) {
+        List<String> inputKeywords = defenseConfig.inputKeywords();
+        if (inputKeywords.isEmpty()) {
             return DefenseResult.allowed();
         }
 
