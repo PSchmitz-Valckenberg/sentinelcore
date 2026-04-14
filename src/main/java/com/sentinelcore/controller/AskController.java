@@ -51,8 +51,21 @@ public class AskController {
 
     @PostMapping("/ask-defended")
     public ResponseEntity<AskResponse> askDefended(@Valid @RequestBody AskRequest request) {
-        List<String> ragContents = resolveRagDocuments(request.ragDocumentIds());
+        DefenseService.DefendedResponse initialResult = defenseService.process(request.userInput(), List.of());
+        if (initialResult.blocked()) {
+            log.debug("Defended request processed - blocked={}, refused={}, latency={}ms",
+                initialResult.blocked(), initialResult.refused(), initialResult.latencyMs());
 
+            return ResponseEntity.ok(new AskResponse(
+                initialResult.answer(),
+                initialResult.blocked(),
+                initialResult.refused(),
+                initialResult.redactions(),
+                initialResult.latencyMs()
+            ));
+        }
+
+        List<String> ragContents = resolveRagDocuments(request.ragDocumentIds());
         DefenseService.DefendedResponse result = defenseService.process(request.userInput(), ragContents);
         log.debug("Defended request processed - blocked={}, refused={}, latency={}ms",
             result.blocked(), result.refused(), result.latencyMs());
