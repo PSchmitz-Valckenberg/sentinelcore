@@ -30,12 +30,12 @@ public class DefenseService {
      * 4. Refusal Detection - heuristic check on LLM response
      */
     public DefendedResponse process(String userInput, List<String> ragContents) {
-        long start = System.currentTimeMillis();
+        long start = System.nanoTime();
 
         // Step 1: Input Analysis - block before LLM
         DefenseResult inputResult = inputAnalyzer.analyze(userInput);
         if (inputResult.blocked()) {
-            long latency = System.currentTimeMillis() - start;
+            long latency = (System.nanoTime() - start) / 1_000_000L;
             log.info("Request blocked by InputAnalyzer - reason: {}", inputResult.reason());
             return new DefendedResponse(BLOCKED_RESPONSE, true, false, List.of(), latency);
         }
