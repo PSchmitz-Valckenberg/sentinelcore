@@ -35,9 +35,12 @@ public class OutputAnalyzer {
         if (output == null || output.isBlank()) {
             return DefenseResult.allowed();
         }
+        
+        String normalizedOutput = output.toLowerCase();
 
         for (String phrase : defenseConfig.outputPhrases()) {
-            if (output.contains(phrase)) {
+            if (phrase == null || phrase.isBlank()) continue;
+            if (normalizedOutput.contains(phrase.toLowerCase())) {
                 log.debug("Output blocked - matched configured sensitive phrase");
                 return DefenseResult.blocked("Output contained a configured sensitive phrase");
             }
