@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Locale;
 
 @Slf4j
 @Component
@@ -35,7 +36,7 @@ public class OutputAnalyzer {
         if (output == null || output.isBlank()) {
             return DefenseResult.allowed();
         }
-        
+
         String normalizedOutput = output.toLowerCase();
 
         for (String phrase : defenseConfig.outputPhrases()) {
@@ -58,9 +59,11 @@ public class OutputAnalyzer {
             return false;
         }
 
+        String normalizedOutput = output.toLowerCase(Locale.ROOT).strip();
+
         for (String phrase : REFUSAL_PHRASES) {
-            if (output.contains(phrase)) {
-                log.debug("Refusal detected - matched phrase: '{}'", phrase);
+            if (normalizedOutput.contains(phrase.toLowerCase(Locale.ROOT))) {
+                log.debug("Refusal detected");
                 return true;
             }
         }

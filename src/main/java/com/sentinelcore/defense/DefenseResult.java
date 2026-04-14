@@ -16,7 +16,4 @@ public record DefenseResult(
         return new DefenseResult(true, false, List.of(), reason);
     }
 
-    public static DefenseResult refused(String reason) {
-        return new DefenseResult(false, true, List.of(), reason);
-    }
 }

@@ -2,6 +2,9 @@ package com.sentinelcore.defense;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.Locale;
+
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -20,7 +23,7 @@ public class InputAnalyzer {
             return DefenseResult.allowed();
         }
 
-        String normalized = userInput.toLowerCase().strip();
+        String normalized = userInput.toLowerCase(Locale.ROOT).strip();
         java.util.List<String> inputKeywords = defenseConfig.inputKeywords();
         if (inputKeywords == null || inputKeywords.isEmpty()) {
             return DefenseResult.allowed();
@@ -30,7 +33,7 @@ public class InputAnalyzer {
             if (keyword == null || keyword.isBlank()) {
                 continue;
             }
-            if (normalized.contains(keyword.toLowerCase())) {
+            if (normalized.contains(keyword.toLowerCase(Locale.ROOT))) {
                 log.debug("Input blocked - matched keyword: '{}'", keyword);
                 return DefenseResult.blocked("Matched injection keyword: " + keyword);
             }
