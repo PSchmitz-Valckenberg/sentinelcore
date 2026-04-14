@@ -8,4 +8,9 @@ import java.util.List;
 public record DefenseConfig(
     List<String> inputKeywords,
     List<String> outputPhrases
-) {}
+) {
+    public DefenseConfig {
+        inputKeywords = inputKeywords == null ? List.of() : inputKeywords;
+        outputPhrases = outputPhrases == null ? List.of() : outputPhrases;
+    }
+}
