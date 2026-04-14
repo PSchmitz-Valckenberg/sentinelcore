@@ -38,8 +38,8 @@ public class OutputAnalyzer {
 
         for (String phrase : defenseConfig.outputPhrases()) {
             if (output.contains(phrase)) {
-                log.debug("Output blocked - matched sensitive phrase: '{}'", phrase);
-                return DefenseResult.blocked("Output contained sensitive phrase: " + phrase);
+                log.debug("Output blocked - matched configured sensitive phrase");
+                return DefenseResult.blocked("Output contained a configured sensitive phrase");
             }
         }
 
