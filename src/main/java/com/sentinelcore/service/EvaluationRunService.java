@@ -53,6 +53,8 @@ public class EvaluationRunService {
         return runRepository.save(run);
     }
 
+    // V1: single transaction over all 25 cases is acceptable.
+    // Per-case isolation (REQUIRES_NEW) is a V2 improvement.
     @Transactional
     public EvaluationRun executeRun(String runId) {
         EvaluationRun run = runRepository.findById(runId)
@@ -75,8 +77,14 @@ public class EvaluationRunService {
             }
             run.setStatus(RunStatus.COMPLETED);
         } catch (Exception e) {
-            log.error("Run {} failed: {}", runId, e.getMessage());
+            log.error("Run {} failed during execution", runId, e); // full stack trace
             run.setStatus(RunStatus.FAILED);
+            run.setFinishedAt(LocalDateTime.now());
+            runRepository.save(run);
+            if (e instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new RuntimeException("Run " + runId + " failed during execution", e);
         }
 
         run.setFinishedAt(LocalDateTime.now());
@@ -148,13 +156,12 @@ public class EvaluationRunService {
     private String buildPersistedEvidence(ScoringEngine.CheckResult check) {
         String resultLabel = check.result() != null ? check.result().name() : "UNKNOWN";
         String evidence = check.evidence();
-
         if (evidence == null || evidence.isBlank()) {
             return "resultLabel=" + resultLabel;
         }
-
         return "resultLabel=" + resultLabel + "; evidence=" + evidence;
     }
+
     private List<String> resolveRagDocuments(EvaluationCase evalCase) {
         return evalCase.getRagDocuments().stream()
             .map(doc -> doc.getTitle() + "\n" + doc.getContent())

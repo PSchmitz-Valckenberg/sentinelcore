@@ -11,4 +11,5 @@ import java.util.List;
 public interface AttackExecutionRepository extends JpaRepository<AttackExecution, String> {
     List<AttackExecution> findByRunId(String runId);
     List<AttackExecution> findByRunIdAndCaseType(String runId, EvaluationCaseType caseType);
+    long countByRunId(String runId);
 }
