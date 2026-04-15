@@ -1,6 +1,5 @@
 package com.sentinelcore.controller;
 
-import com.sentinelcore.defense.DefenseResult;
 import com.sentinelcore.defense.DefenseService;
 import com.sentinelcore.domain.config.SystemPromptConfig;
 import com.sentinelcore.dto.AskRequest;
