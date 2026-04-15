@@ -134,13 +134,27 @@ public class EvaluationRunService {
                 .id("score-" + UUID.randomUUID().toString().substring(0, 8))
                 .execution(execution)
                 .checkType(check.type())
-                .result(check.result() == ResultLabel.SUCCESS || check.result() == ResultLabel.PARTIAL_SUCCESS)
-                .evidence(check.evidence())
+                .result(isSuccessfulResult(check.result()))
+                .evidence(buildPersistedEvidence(check))
                 .build();
             scoreDetailRepository.save(detail);
         }
     }
 
+    private boolean isSuccessfulResult(ResultLabel resultLabel) {
+        return resultLabel == ResultLabel.SUCCESS || resultLabel == ResultLabel.PARTIAL_SUCCESS;
+    }
+
+    private String buildPersistedEvidence(ScoringEngine.CheckResult check) {
+        String resultLabel = check.result() != null ? check.result().name() : "UNKNOWN";
+        String evidence = check.evidence();
+
+        if (evidence == null || evidence.isBlank()) {
+            return "resultLabel=" + resultLabel;
+        }
+
+        return "resultLabel=" + resultLabel + "; evidence=" + evidence;
+    }
     private List<String> resolveRagDocuments(EvaluationCase evalCase) {
         return evalCase.getRagDocuments().stream()
             .map(doc -> doc.getTitle() + "\n" + doc.getContent())
