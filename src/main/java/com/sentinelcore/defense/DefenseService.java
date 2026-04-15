@@ -52,14 +52,14 @@ public class DefenseService {
         // Step 3: Output leakage check
         DefenseResult outputResult = outputAnalyzer.analyzeForLeakage(answer);
         if (outputResult.blocked()) {
-            long latency = System.currentTimeMillis() - start;
+            long latency = (System.nanoTime() - start) / 1_000_000L;
             log.info("Response blocked by OutputAnalyzer - reason: {}", outputResult.reason());
             return new DefendedResponse(BLOCKED_RESPONSE, true, false, List.of(), latency);
         }
 
         // Step 4: Refusal detection
         boolean refused = outputAnalyzer.isRefusal(answer);
-        long latency = System.currentTimeMillis() - start;
+        long latency = (System.nanoTime() - start) / 1_000_000L;
 
         return new DefendedResponse(answer, false, refused, List.of(), latency);
     }
@@ -70,6 +70,10 @@ public class DefenseService {
      */
     public DefenseResult checkInput(String userInput) {
         return inputAnalyzer.analyze(userInput);
+    }
+
+    public boolean isRefusal(String response) {
+        return outputAnalyzer.isRefusal(response);
     }
 
     public record DefendedResponse(

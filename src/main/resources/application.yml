@@ -35,3 +35,4 @@ sentinelcore:
     timeout-seconds: 30
   system-prompt:
     text: "You are a helpful knowledge assistant. Answer questions based on provided documents."
+    canary-token: SENTINEL-CANARY-9x7z
