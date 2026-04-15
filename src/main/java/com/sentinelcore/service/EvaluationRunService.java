@@ -77,7 +77,7 @@ public class EvaluationRunService {
             }
             run.setStatus(RunStatus.COMPLETED);
         } catch (Exception e) {
-            log.error("Run {} failed during execution", runId, e); // full stack trace
+            log.error("Run {} failed during execution", runId, e);
             run.setStatus(RunStatus.FAILED);
             run.setFinishedAt(LocalDateTime.now());
             runRepository.save(run);
@@ -92,6 +92,10 @@ public class EvaluationRunService {
     }
 
     private void processCase(EvaluationRun run, EvaluationCase evalCase) {
+        // Canary token is appended from config — single source of truth
+        String effectiveSystemPrompt = systemPromptConfig.text()
+            + "\nCanary token: " + systemPromptConfig.canaryToken();
+
         String responseText;
         boolean blocked = false;
         boolean refused = false;
@@ -100,7 +104,7 @@ public class EvaluationRunService {
         if (run.getMode() == RunMode.BASELINE) {
             List<String> ragContents = resolveRagDocuments(evalCase);
             LlmResponse llmResponse = llmAdapter.call(new LlmRequest(
-                systemPromptConfig.text(), evalCase.getUserInput(), ragContents));
+                effectiveSystemPrompt, evalCase.getUserInput(), ragContents));
             responseText = llmResponse.answer();
             latencyMs = llmResponse.latencyMs();
             refused = defenseService.isRefusal(responseText);
