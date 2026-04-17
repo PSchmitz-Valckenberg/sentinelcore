@@ -26,7 +26,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -114,13 +116,21 @@ public class ReportingService {
             blockedCount, refusedCount, falsePositiveRate, refusalRate);
 
         // Breakdown by AttackCategory (ATTACK cases only)
-        Map<AttackCategory, AttackCategoryMetrics> breakdown = executions.stream()
+        Map<AttackCategory, List<AttackExecution>> executionsByCategory = executions.stream()
             .filter(e -> e.getCaseType() == EvaluationCaseType.ATTACK)
             .filter(e -> e.getEvaluationCase() != null)
             .filter(e -> e.getEvaluationCase().getAttackCategory() != null)
-            .collect(Collectors.groupingBy(e -> e.getEvaluationCase().getAttackCategory()))
-            .entrySet().stream()
-            .collect(Collectors.toMap(Map.Entry::getKey, e -> buildCategoryMetrics(e.getValue())));
+            .collect(Collectors.groupingBy(
+                e -> e.getEvaluationCase().getAttackCategory(),
+                () -> new EnumMap<>(AttackCategory.class),
+                Collectors.toList()));
+
+        Map<AttackCategory, AttackCategoryMetrics> breakdown = Arrays.stream(AttackCategory.values())
+            .collect(Collectors.toMap(
+                category -> category,
+                category -> buildCategoryMetrics(executionsByCategory.getOrDefault(category, Collections.emptyList())),
+                (left, right) -> left,
+                () -> new EnumMap<>(AttackCategory.class)));
 
         log.info("Metrics for run {}: attackSuccessRate={}, partialSuccessRate={}, falsePositiveRate={}, refusalRate={}, avgLatency={}ms",
             runId, attackSuccessRate, partialSuccessRate, falsePositiveRate, refusalRate, avgLatencyMs);
