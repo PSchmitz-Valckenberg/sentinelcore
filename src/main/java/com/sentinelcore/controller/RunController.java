@@ -3,10 +3,12 @@ package com.sentinelcore.controller;
 import com.sentinelcore.domain.entity.EvaluationRun;
 import com.sentinelcore.dto.RunCreateRequest;
 import com.sentinelcore.dto.RunExecutionResponse;
+import com.sentinelcore.dto.RunMetricsResponse;
 import com.sentinelcore.dto.RunResultResponse;
 import com.sentinelcore.repository.AttackExecutionRepository;
 import com.sentinelcore.repository.EvaluationCaseRepository;
 import com.sentinelcore.service.EvaluationRunService;
+import com.sentinelcore.service.ReportingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +32,7 @@ public class RunController {
     private final EvaluationRunService runService;
     private final AttackExecutionRepository executionRepository;
     private final EvaluationCaseRepository caseRepository;
+    private final ReportingService reportingService;
 
     @PostMapping
     public ResponseEntity<Map<String, String>> createRun(@Valid @RequestBody RunCreateRequest request) {
@@ -51,9 +54,13 @@ public class RunController {
             completedCases));
     }
 
-    // Step 6: full implementation with executions + score details per case
     @GetMapping("/{id}/results")
     public ResponseEntity<RunResultResponse> getResults(@PathVariable String id) {
-        return ResponseEntity.ok(new RunResultResponse(id));
+        return ResponseEntity.ok(reportingService.getResults(id));
+    }
+
+    @GetMapping("/{id}/report")
+    public ResponseEntity<RunMetricsResponse> getReport(@PathVariable String id) {
+        return ResponseEntity.ok(reportingService.getMetrics(id));
     }
 }

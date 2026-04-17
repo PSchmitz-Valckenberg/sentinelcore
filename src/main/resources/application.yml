@@ -21,6 +21,12 @@ spring:
 server:
   port: 8080
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui/index.html
+  api-docs:
+    path: /v3/api-docs
+
 logging:
   level:
     com.sentinelcore: DEBUG
@@ -35,4 +41,4 @@ sentinelcore:
     timeout-seconds: 30
   system-prompt:
     text: "You are a helpful knowledge assistant. Answer questions based on provided documents."
-    canary-token: SENTINEL-CANARY-9x7z
+    canary-token: ${CANARY_TOKEN:SENTINEL-CANARY-9x7z}
