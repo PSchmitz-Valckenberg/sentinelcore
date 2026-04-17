@@ -3,6 +3,7 @@ package com.sentinelcore.service;
 import com.sentinelcore.domain.entity.AttackExecution;
 import com.sentinelcore.domain.entity.EvaluationRun;
 import com.sentinelcore.domain.entity.ScoreDetail;
+import com.sentinelcore.domain.enums.AttackCategory;
 import com.sentinelcore.domain.enums.EvaluationCaseType;
 import com.sentinelcore.domain.enums.ResultLabel;
 import com.sentinelcore.dto.ExecutionDto;
@@ -51,25 +52,18 @@ public class ReportingService {
             .map(AttackExecution::getId)
             .collect(Collectors.toSet());
 
-        Map<String, List<ScoreDetail>> scoreDetailsByExecutionId = scoreDetailRepository.findAll().stream()
-            .filter(d -> d.getExecution() != null && executionIds.contains(d.getExecution().getId()))
-            .collect(Collectors.groupingBy(d -> d.getExecution().getId()));
+        Map<String, List<ScoreDetail>> scoreDetailsByExecutionId = executionIds.isEmpty()
+            ? Collections.emptyMap()
+            : scoreDetailRepository.findByExecutionIdIn(executionIds).stream()
+                .collect(Collectors.groupingBy(d -> d.getExecution().getId()));
 
         List<ExecutionDto> executionDtos = executions.stream()
             .map(e -> toExecutionDto(e, scoreDetailsByExecutionId))
             .toList();
 
         return new RunResultResponse(
-            run.getId(),
-            run.getStatus(),
-            run.getMode(),
-            run.getModel(),
-            run.getStartedAt(),
-            run.getFinishedAt(),
-            totalCases,
-            executions.size(),
-            executionDtos
-        );
+            run.getId(), run.getStatus(), run.getMode(), run.getModel(),
+            run.getStartedAt(), run.getFinishedAt(), totalCases, executions.size(), executionDtos);
     }
 
     @Transactional(readOnly = true)
@@ -80,59 +74,55 @@ public class ReportingService {
         List<AttackExecution> executions = executionRepository.findByRunId(runId);
         long totalCases = caseRepository.count();
 
-        // --- Utility metrics (across all cases) ---
+        // Utility metrics (across all cases)
         long successCount = count(executions, ResultLabel.SUCCESS);
         long partialSuccessCount = count(executions, ResultLabel.PARTIAL_SUCCESS);
         long failureCount = count(executions, ResultLabel.FAIL);
         double avgLatencyMs = round1(executions.stream()
             .mapToLong(AttackExecution::getLatencyMs).average().orElse(0.0));
 
-        // successRate = successful or partially successful attack cases / total attack cases
+        // attackSuccessRate and partialSuccessRate computed over ATTACK cases only
         List<AttackExecution> attackExecs = filterByCaseType(executions, EvaluationCaseType.ATTACK);
-        long successfulAttackCount = attackExecs.stream()
-            .filter(e -> e.getLabel() == ResultLabel.SUCCESS || e.getLabel() == ResultLabel.PARTIAL_SUCCESS)
-            .count();
-        double successRate = round3(attackExecs.isEmpty() ? 0.0
-            : (double) successfulAttackCount / attackExecs.size());
+        double attackSuccessRate = round3(attackExecs.isEmpty() ? 0.0
+            : (double) count(attackExecs, ResultLabel.SUCCESS) / attackExecs.size());
+        double partialSuccessRate = round3(attackExecs.isEmpty() ? 0.0
+            : (double) count(attackExecs, ResultLabel.PARTIAL_SUCCESS) / attackExecs.size());
 
         UtilityMetrics utilityMetrics = new UtilityMetrics(
-            totalCases, successCount, partialSuccessCount, failureCount, successRate, avgLatencyMs);
+            totalCases, successCount, partialSuccessCount, failureCount,
+            attackSuccessRate, partialSuccessRate, avgLatencyMs);
 
-        // --- Security metrics ---
+        // Security metrics
         long blockedCount = executions.stream().filter(AttackExecution::isBlocked).count();
         long refusedCount = executions.stream().filter(AttackExecution::isRefused).count();
 
-        // blockRate = blocked benign cases / total benign cases (false positive rate)
+        // falsePositiveRate = blocked or refused BENIGN cases / total BENIGN cases
         List<AttackExecution> benignExecs = filterByCaseType(executions, EvaluationCaseType.BENIGN);
-        long blockedBenignCount = benignExecs.stream().filter(AttackExecution::isBlocked).count();
-        double blockRate = round3(benignExecs.isEmpty() ? 0.0
-            : (double) blockedBenignCount / benignExecs.size());
+        long falsePositiveBenignCount = benignExecs.stream()
+            .filter(e -> e.isBlocked() || e.isRefused()).count();
+        double falsePositiveRate = round3(benignExecs.isEmpty() ? 0.0
+            : (double) falsePositiveBenignCount / benignExecs.size());
         double refusalRate = round3(executions.isEmpty() ? 0.0
             : (double) refusedCount / executions.size());
 
         SecurityMetrics securityMetrics = new SecurityMetrics(
-            blockedCount, refusedCount, blockRate, refusalRate);
+            blockedCount, refusedCount, falsePositiveRate, refusalRate);
 
-        // --- Breakdown by case type ---
-        Map<EvaluationCaseType, AttackCategoryMetrics> breakdown = executions.stream()
-            .collect(Collectors.groupingBy(AttackExecution::getCaseType))
+        // Breakdown by AttackCategory (ATTACK cases only)
+        Map<AttackCategory, AttackCategoryMetrics> breakdown = executions.stream()
+            .filter(e -> e.getCaseType() == EvaluationCaseType.ATTACK)
+            .filter(e -> e.getEvaluationCase() != null)
+            .filter(e -> e.getEvaluationCase().getAttackCategory() != null)
+            .collect(Collectors.groupingBy(e -> e.getEvaluationCase().getAttackCategory()))
             .entrySet().stream()
-            .collect(Collectors.toMap(
-                Map.Entry::getKey,
-                e -> buildCategoryMetrics(e.getValue())
-            ));
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> buildCategoryMetrics(e.getValue())));
 
-        log.info("Metrics for run {}: successRate={}, blockRate={}, refusalRate={}, avgLatency={}ms",
-            runId, successRate, blockRate, refusalRate, avgLatencyMs);
+        log.info("Metrics for run {}: attackSuccessRate={}, partialSuccessRate={}, falsePositiveRate={}, refusalRate={}, avgLatency={}ms",
+            runId, attackSuccessRate, partialSuccessRate, falsePositiveRate, refusalRate, avgLatencyMs);
 
         return new RunMetricsResponse(
-            run.getId(),
-            run.getMode().name(),
-            run.getStatus().name(),
-            utilityMetrics,
-            securityMetrics,
-            breakdown
-        );
+            run.getId(), run.getMode().name(), run.getStatus().name(),
+            utilityMetrics, securityMetrics, breakdown);
     }
 
     // --- Helpers ---
@@ -143,11 +133,12 @@ public class ReportingService {
         long failure = count(execs, ResultLabel.FAIL);
         long blocked = execs.stream().filter(AttackExecution::isBlocked).count();
         long refused = execs.stream().filter(AttackExecution::isRefused).count();
-        long successfulAttacks = success + partial;
-        double sr = round3(execs.isEmpty() ? 0.0 : (double) successfulAttacks / execs.size());
+        double asr = round3(execs.isEmpty() ? 0.0 : (double) success / execs.size());
+        double psr = round3(execs.isEmpty() ? 0.0 : (double) partial / execs.size());
         double br = round3(execs.isEmpty() ? 0.0 : (double) blocked / execs.size());
         double avg = round1(execs.stream().mapToLong(AttackExecution::getLatencyMs).average().orElse(0.0));
-        return new AttackCategoryMetrics(execs.size(), success, partial, failure, blocked, refused, sr, br, avg);
+        return new AttackCategoryMetrics(
+            execs.size(), success, partial, failure, blocked, refused, asr, psr, br, avg);
     }
 
     private long count(List<AttackExecution> execs, ResultLabel label) {

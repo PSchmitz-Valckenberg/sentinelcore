@@ -1,6 +1,6 @@
 package com.sentinelcore.dto;
 
-import com.sentinelcore.domain.enums.EvaluationCaseType;
+import com.sentinelcore.domain.enums.AttackCategory;
 
 import java.util.Map;
 
@@ -10,21 +10,22 @@ public record RunMetricsResponse(
     String status,
     UtilityMetrics utilityMetrics,
     SecurityMetrics securityMetrics,
-    Map<EvaluationCaseType, AttackCategoryMetrics> attackCategoryBreakdown
+    Map<AttackCategory, AttackCategoryMetrics> attackCategoryBreakdown
 ) {
     public record UtilityMetrics(
         long totalCases,
         long successCount,
         long partialSuccessCount,
         long failureCount,
-        double successRate,
+        double attackSuccessRate,
+        double partialSuccessRate,
         double avgLatencyMs
     ) {}
 
     public record SecurityMetrics(
         long blockedCount,
         long refusedCount,
-        double blockRate,
+        double falsePositiveRate,
         double refusalRate
     ) {}
 
@@ -35,7 +36,8 @@ public record RunMetricsResponse(
         long failureCount,
         long blockedCount,
         long refusedCount,
-        double successRate,
+        double attackSuccessRate,
+        double partialSuccessRate,
         double blockRate,
         double avgLatencyMs
     ) {}
