@@ -59,8 +59,8 @@ public class RunController {
         return ResponseEntity.ok(reportingService.getResults(id));
     }
 
-    @GetMapping("/{id}/metrics")
-    public ResponseEntity<RunMetricsResponse> getMetrics(@PathVariable String id) {
+    @GetMapping("/{id}/report")
+    public ResponseEntity<RunMetricsResponse> getReport(@PathVariable String id) {
         return ResponseEntity.ok(reportingService.getMetrics(id));
     }
 }
