@@ -195,7 +195,7 @@ public class ReportingService {
         String evaluationCaseId = execution.getEvaluationCase().getId();
         EvaluationCase evaluationCase = evaluationCasesById.get(evaluationCaseId);
         if (evaluationCase == null) {
-            evaluationCase = evaluationCaseRepository.findById(evaluationCaseId)
+            evaluationCase = caseRepository.findById(evaluationCaseId)
                 .orElseThrow(() -> new EntityNotFoundException("Evaluation case not found: " + evaluationCaseId));
         }
 
