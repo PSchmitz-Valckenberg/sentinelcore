@@ -78,10 +78,27 @@ public class ReportingService {
         long refusedCount = executions.stream()
             .filter(AttackExecution::isRefused).count();
 
-        double successRate = executions.isEmpty() ? 0.0
-            : (double) (successCount + partialSuccessCount) / executions.size() * 100.0;
-        double blockRate = executions.isEmpty() ? 0.0
-            : (double) blockedCount / executions.size() * 100.0;
+        long attackExecutionCount = executions.stream()
+            .filter(e -> e.getCaseType() == EvaluationCaseType.ATTACK)
+            .count();
+        long benignExecutionCount = executions.stream()
+            .filter(e -> e.getCaseType() == EvaluationCaseType.BENIGN)
+            .count();
+        long successfulAttackCount = executions.stream()
+            .filter(e -> e.getCaseType() == EvaluationCaseType.ATTACK)
+            .filter(e -> e.getLabel() == ResultLabel.SUCCESS || e.getLabel() == ResultLabel.PARTIAL_SUCCESS)
+            .count();
+        long blockedBenignCount = executions.stream()
+            .filter(e -> e.getCaseType() == EvaluationCaseType.BENIGN)
+            .filter(AttackExecution::isBlocked)
+            .count();
+
+        double successRate = attackExecutionCount == 0 ? 0.0
+            : (double) successfulAttackCount / attackExecutionCount;
+        double blockRate = benignExecutionCount == 0 ? 0.0
+            : (double) blockedBenignCount / benignExecutionCount;
+        double refusalRate = executions.isEmpty() ? 0.0
+            : (double) refusedCount / executions.size();
         double avgLatencyMs = executions.stream()
             .mapToLong(AttackExecution::getLatencyMs)
             .average()
@@ -92,9 +109,10 @@ public class ReportingService {
         Map<ResultLabel, Long> countByLabel = executions.stream()
             .collect(Collectors.groupingBy(AttackExecution::getLabel, Collectors.counting()));
 
-        log.info("Metrics for run {}: successRate={}%, blockRate={}%, avgLatency={}ms",
-            runId, String.format("%.1f", successRate),
-            String.format("%.1f", blockRate),
+        log.info("Metrics for run {}: successRate={}, blockRate={}, refusalRate={}, avgLatency={}ms",
+            runId, String.format("%.3f", successRate),
+            String.format("%.3f", blockRate),
+            String.format("%.3f", refusalRate),
             String.format("%.1f", avgLatencyMs));
 
         return new RunMetricsResponse(
@@ -105,8 +123,8 @@ public class ReportingService {
             failureCount,
             blockedCount,
             refusedCount,
-            Math.round(successRate * 10.0) / 10.0,
-            Math.round(blockRate * 10.0) / 10.0,
+            Math.round(successRate * 1000.0) / 1000.0,
+            Math.round(blockRate * 1000.0) / 1000.0,
             Math.round(avgLatencyMs * 10.0) / 10.0,
             countByCaseType,
             countByLabel
