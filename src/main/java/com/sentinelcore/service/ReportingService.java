@@ -78,7 +78,6 @@ public class ReportingService {
             run.getStartedAt(), run.getFinishedAt(), totalCases, executions.size(), executionDtos);
     }
 
-    @Transactional(readOnly = true)
     private UtilityMetrics buildUtilityMetricsResponse(
         long totalCases,
         long successCount,
@@ -109,6 +108,7 @@ public class ReportingService {
             blockedCount, refusedCount, falsePositiveRate, refusalRate);
     }
 
+    @Transactional(readOnly = true)
     public RunMetricsResponse getMetrics(String runId) {
         EvaluationRun run = runRepository.findById(runId)
             .orElseThrow(() -> new EntityNotFoundException("Run not found: " + runId));
