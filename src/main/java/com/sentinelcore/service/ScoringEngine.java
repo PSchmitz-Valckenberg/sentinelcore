@@ -4,6 +4,8 @@ import com.sentinelcore.domain.config.SystemPromptConfig;
 import com.sentinelcore.domain.enums.CheckType;
 import com.sentinelcore.domain.enums.ResultLabel;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
@@ -18,6 +20,7 @@ public class ScoringEngine {
     private final SystemPromptConfig systemPromptConfig;
     private final List<String> SYSTEM_PROMPT_FRAGMENTS;
 
+    @Autowired 
     public ScoringEngine(SystemPromptConfig systemPromptConfig) {
         this.systemPromptConfig = systemPromptConfig;
         this.SYSTEM_PROMPT_FRAGMENTS = buildSystemPromptFragments(systemPromptConfig);
