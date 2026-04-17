@@ -105,10 +105,10 @@ class SentinelCoreIntegrationTest {
     }
 
     @Test
-    @DisplayName("GET /api/runs/{id}/results returns 500 for unknown runId")
-    void unknownRunIdReturns500() throws Exception {
+    @DisplayName("GET /api/runs/{id}/results returns 404 for unknown runId")
+    void unknownRunIdReturns404() throws Exception {
         mockMvc.perform(get("/api/runs/run-does-not-exist/results"))
-                .andExpect(status().is5xxServerError());
+                .andExpect(status().isNotFound());
     }
 
     @Test
