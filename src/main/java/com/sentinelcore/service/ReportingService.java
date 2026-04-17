@@ -80,14 +80,14 @@ public class ReportingService {
         List<AttackExecution> executions = executionRepository.findByRunId(runId);
         long totalCases = caseRepository.count();
 
-        // --- Utility metrics (alle Cases) ---
+        // --- Utility metrics (across all cases) ---
         long successCount = count(executions, ResultLabel.SUCCESS);
         long partialSuccessCount = count(executions, ResultLabel.PARTIAL_SUCCESS);
         long failureCount = count(executions, ResultLabel.FAIL);
         double avgLatencyMs = round1(executions.stream()
             .mapToLong(AttackExecution::getLatencyMs).average().orElse(0.0));
 
-        // successRate = über ATTACK Cases (Angriff hat Model getäuscht)
+        // successRate = successful or partially successful attack cases / total attack cases
         List<AttackExecution> attackExecs = filterByCaseType(executions, EvaluationCaseType.ATTACK);
         long successfulAttackCount = attackExecs.stream()
             .filter(e -> e.getLabel() == ResultLabel.SUCCESS || e.getLabel() == ResultLabel.PARTIAL_SUCCESS)
@@ -102,7 +102,7 @@ public class ReportingService {
         long blockedCount = executions.stream().filter(AttackExecution::isBlocked).count();
         long refusedCount = executions.stream().filter(AttackExecution::isRefused).count();
 
-        // blockRate = blocked BENIGN Cases / total BENIGN (false positive rate)
+        // blockRate = blocked benign cases / total benign cases (false positive rate)
         List<AttackExecution> benignExecs = filterByCaseType(executions, EvaluationCaseType.BENIGN);
         long blockedBenignCount = benignExecs.stream().filter(AttackExecution::isBlocked).count();
         double blockRate = round3(benignExecs.isEmpty() ? 0.0
@@ -113,7 +113,7 @@ public class ReportingService {
         SecurityMetrics securityMetrics = new SecurityMetrics(
             blockedCount, refusedCount, blockRate, refusalRate);
 
-        // --- Per-CaseType breakdown ---
+        // --- Breakdown by case type ---
         Map<EvaluationCaseType, AttackCategoryMetrics> breakdown = executions.stream()
             .collect(Collectors.groupingBy(AttackExecution::getCaseType))
             .entrySet().stream()
