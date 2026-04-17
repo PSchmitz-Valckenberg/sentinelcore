@@ -35,11 +35,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * - Results are retrievable via GET /api/runs/{id}/results
  * - Metrics are retrievable via GET /api/runs/{id}/report
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class SentinelCoreIntegrationTest {
-
     @Autowired
     MockMvc mockMvc;
 
