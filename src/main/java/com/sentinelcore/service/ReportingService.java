@@ -16,7 +16,9 @@ import com.sentinelcore.dto.ScoreDetailDto;
 import com.sentinelcore.repository.AttackExecutionRepository;
 import com.sentinelcore.repository.EvaluationCaseRepository;
 import com.sentinelcore.repository.EvaluationRunRepository;
+import jakarta.persistence.EntityManager;
 import com.sentinelcore.repository.ScoreDetailRepository;
+import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +41,9 @@ public class ReportingService {
     private final AttackExecutionRepository executionRepository;
     private final ScoreDetailRepository scoreDetailRepository;
     private final EvaluationCaseRepository caseRepository;
+    @PersistenceContext
+    private EntityManager entityManager;
+
 
     @Transactional(readOnly = true)
     public RunResultResponse getResults(String runId) {
@@ -51,8 +56,15 @@ public class ReportingService {
         Set<String> executionIds = executions.stream()
             .map(AttackExecution::getId)
             .collect(Collectors.toSet());
-
         Map<String, List<ScoreDetail>> scoreDetailsByExecutionId = executionIds.isEmpty()
+            ? Collections.emptyMap()
+            : entityManager.createQuery(
+                "select sd from ScoreDetail sd join fetch sd.execution e where e.id in :executionIds",
+                ScoreDetail.class
+            )
+            .setParameter("executionIds", executionIds)
+            .getResultList()
+            .stream()
             ? Collections.emptyMap()
             : scoreDetailRepository.findByExecutionIdIn(executionIds).stream()
                 .collect(Collectors.groupingBy(d -> d.getExecution().getId()));
