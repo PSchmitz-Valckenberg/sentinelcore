@@ -34,11 +34,11 @@ Create `src/main/resources/application-local.yml`:
 
 ```yaml
 sentinelcore:
-	llm:
-		api-key: YOUR_GEMINI_API_KEY
-	system-prompt:
-		text: "You are a helpful knowledge assistant. Answer questions based on provided documents."
-		canary-token: "SENTINEL-CANARY-9x7z"
+  llm:
+    api-key: YOUR_GEMINI_API_KEY
+  system-prompt:
+    text: "You are a helpful knowledge assistant. Answer questions based on provided documents."
+    canary-token: "SENTINEL-CANARY-9x7z"
 ```
 
 Or set the environment variable:
