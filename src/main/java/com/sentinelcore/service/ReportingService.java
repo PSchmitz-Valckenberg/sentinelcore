@@ -19,8 +19,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -41,9 +43,15 @@ public class ReportingService {
 
         List<AttackExecution> executions = executionRepository.findByRunId(runId);
         long totalCases = caseRepository.count();
+        Set<String> executionIds = executions.stream()
+            .map(AttackExecution::getId)
+            .collect(Collectors.toSet());
+        Map<String, List<ScoreDetail>> scoreDetailsByExecutionId = scoreDetailRepository.findAll().stream()
+            .filter(detail -> detail.getExecution() != null && executionIds.contains(detail.getExecution().getId()))
+            .collect(Collectors.groupingBy(detail -> detail.getExecution().getId()));
 
         List<ExecutionDto> executionDtos = executions.stream()
-            .map(this::toExecutionDto)
+            .map(execution -> toExecutionDto(execution, scoreDetailsByExecutionId))
             .toList();
 
         return new RunResultResponse(
@@ -131,8 +139,8 @@ public class ReportingService {
         );
     }
 
-    private ExecutionDto toExecutionDto(AttackExecution execution) {
-        List<ScoreDetail> details = scoreDetailRepository.findByExecutionId(execution.getId());
+    private ExecutionDto toExecutionDto(AttackExecution execution, Map<String, List<ScoreDetail>> scoreDetailsByExecutionId) {
+        List<ScoreDetail> details = scoreDetailsByExecutionId.getOrDefault(execution.getId(), Collections.emptyList());
         List<ScoreDetailDto> detailDtos = details.stream()
             .map(d -> new ScoreDetailDto(d.getId(), d.getCheckType(), d.isResult(), d.getEvidence()))
             .toList();
