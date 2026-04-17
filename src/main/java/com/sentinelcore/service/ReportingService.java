@@ -59,14 +59,6 @@ public class ReportingService {
             .collect(Collectors.toSet());
         Map<String, List<ScoreDetail>> scoreDetailsByExecutionId = executionIds.isEmpty()
             ? Collections.emptyMap()
-            : entityManager.createQuery(
-                "select sd from ScoreDetail sd join fetch sd.execution e where e.id in :executionIds",
-                ScoreDetail.class
-            )
-            .setParameter("executionIds", executionIds)
-            .getResultList()
-            .stream()
-            ? Collections.emptyMap()
             : scoreDetailRepository.findByExecutionIdIn(executionIds).stream()
                 .collect(Collectors.groupingBy(d -> d.getExecution().getId()));
 
