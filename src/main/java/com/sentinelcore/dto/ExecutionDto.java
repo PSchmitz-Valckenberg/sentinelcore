@@ -8,7 +8,7 @@ import java.util.List;
 public record ExecutionDto(
     String id,
     String caseId,
-    String caseTitle,
+    String caseName,
     EvaluationCaseType caseType,
     String response,
     boolean blocked,
