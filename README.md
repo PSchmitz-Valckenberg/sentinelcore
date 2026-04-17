@@ -44,7 +44,7 @@ sentinelcore:
 Or set the environment variable:
 
 ```bash
-export LLM_API_KEY=your_api_key_here
+export SENTINELCORE_LLM_API_KEY=your_api_key_here
 ```
 
 ### 4. Run the application
