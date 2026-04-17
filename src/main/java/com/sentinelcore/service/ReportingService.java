@@ -79,6 +79,36 @@ public class ReportingService {
     }
 
     @Transactional(readOnly = true)
+    private UtilityMetrics buildUtilityMetricsResponse(
+        long totalCases,
+        long successCount,
+        long partialSuccessCount,
+        long failureCount,
+        double attackSuccessRate,
+        double partialSuccessRate,
+        double avgLatencyMs
+    ) {
+        // The response DTO currently groups attack-oriented rates under UtilityMetrics.
+        // Centralizing that mapping here makes the contract explicit and reduces the
+        // chance of wiring the wrong values into the response in future changes.
+        return new UtilityMetrics(
+            totalCases, successCount, partialSuccessCount, failureCount,
+            attackSuccessRate, partialSuccessRate, avgLatencyMs);
+    }
+
+    private SecurityMetrics buildSecurityMetricsResponse(
+        long blockedCount,
+        long refusedCount,
+        double falsePositiveRate,
+        double refusalRate
+    ) {
+        // The response DTO currently groups false-positive/refusal rates under
+        // SecurityMetrics. Keeping this mapping in one place avoids semantic confusion
+        // at call sites while preserving the existing response shape.
+        return new SecurityMetrics(
+            blockedCount, refusedCount, falsePositiveRate, refusalRate);
+    }
+
     public RunMetricsResponse getMetrics(String runId) {
         EvaluationRun run = runRepository.findById(runId)
             .orElseThrow(() -> new EntityNotFoundException("Run not found: " + runId));
@@ -97,7 +127,7 @@ public class ReportingService {
         double avgLatencyMs = round1(executions.stream()
             .mapToInt(AttackExecution::getLatencyMs).average().orElse(0.0));
 
-        UtilityMetrics utilityMetrics = new UtilityMetrics(
+        UtilityMetrics responseUtilityMetrics = buildUtilityMetricsResponse(
             totalCases, successCount, partialSuccessCount, failureCount,
             attackSuccessRate, partialSuccessRate, avgLatencyMs);
 
@@ -111,7 +141,7 @@ public class ReportingService {
         double refusalRate = round3(executions.isEmpty() ? 0.0
             : (double) refusedCount / executions.size());
 
-        SecurityMetrics securityMetrics = new SecurityMetrics(
+        SecurityMetrics responseSecurityMetrics = buildSecurityMetricsResponse(
             blockedCount, refusedCount, falsePositiveRate, refusalRate);
 
         Map<AttackCategory, AttackCategoryMetrics> breakdown = executions.stream()
@@ -127,7 +157,7 @@ public class ReportingService {
 
         return new RunMetricsResponse(
             run.getId(), run.getMode().name(), run.getStatus().name(),
-            utilityMetrics, securityMetrics, breakdown);
+            responseUtilityMetrics, responseSecurityMetrics, breakdown);
     }
 
     // --- Helpers ---
