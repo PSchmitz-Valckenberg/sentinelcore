@@ -1,6 +1,7 @@
 package com.sentinelcore.service;
 
 import com.sentinelcore.domain.entity.AttackExecution;
+import com.sentinelcore.domain.entity.EvaluationCase;
 import com.sentinelcore.domain.entity.EvaluationRun;
 import com.sentinelcore.domain.entity.ScoreDetail;
 import com.sentinelcore.domain.enums.AttackCategory;
@@ -169,18 +170,47 @@ public class ReportingService {
         return Math.round(value * 10.0) / 10.0;
     }
 
+    private List<ExecutionDto> toExecutionDtos(List<AttackExecution> executions,
+                                               Map<String, List<ScoreDetail>> scoreDetailsByExecutionId) {
+        Set<String> evaluationCaseIds = executions.stream()
+            .map(AttackExecution::getEvaluationCase)
+            .filter(java.util.Objects::nonNull)
+            .map(EvaluationCase::getId)
+            .collect(Collectors.toSet());
+
+        Map<String, EvaluationCase> evaluationCasesById = evaluationCaseRepository.findAllById(evaluationCaseIds).stream()
+            .collect(Collectors.toMap(EvaluationCase::getId, evaluationCase -> evaluationCase));
+
+        return executions.stream()
+            .map(execution -> toExecutionDto(execution, scoreDetailsByExecutionId, evaluationCasesById))
+            .toList();
+    }
+
     private ExecutionDto toExecutionDto(AttackExecution execution,
                                         Map<String, List<ScoreDetail>> scoreDetailsByExecutionId) {
+        return toExecutionDto(execution, scoreDetailsByExecutionId, Collections.emptyMap());
+    }
+
+    private ExecutionDto toExecutionDto(AttackExecution execution,
+                                        Map<String, List<ScoreDetail>> scoreDetailsByExecutionId,
+                                        Map<String, EvaluationCase> evaluationCasesById) {
         List<ScoreDetail> details = scoreDetailsByExecutionId
             .getOrDefault(execution.getId(), Collections.emptyList());
         List<ScoreDetailDto> detailDtos = details.stream()
             .map(d -> new ScoreDetailDto(d.getId(), d.getCheckType(), d.isResult(), d.getEvidence()))
             .toList();
 
+        String evaluationCaseId = execution.getEvaluationCase().getId();
+        EvaluationCase evaluationCase = evaluationCasesById.get(evaluationCaseId);
+        if (evaluationCase == null) {
+            evaluationCase = evaluationCaseRepository.findById(evaluationCaseId)
+                .orElseThrow(() -> new EntityNotFoundException("Evaluation case not found: " + evaluationCaseId));
+        }
+
         return new ExecutionDto(
             execution.getId(),
-            execution.getEvaluationCase().getId(),
-            execution.getEvaluationCase().getName(),
+            evaluationCase.getId(),
+            evaluationCase.getName(),
             execution.getCaseType(),
             execution.getResponse(),
             execution.isBlocked(),
