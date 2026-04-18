@@ -26,7 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Integration test for the full evaluation pipeline.
  *
  * Uses @SpringBootTest to load the full application context with a real
- * PostgreSQL instance provided by Testcontainers (configured via application-test.yml).
+ * PostgreSQL database (configured via application-test.yml).
  * The LlmAdapter is mocked to avoid real API calls.
  *
  * This test verifies:
@@ -106,12 +106,8 @@ class SentinelCoreIntegrationTest {
     @Test
     @DisplayName("GET /api/runs/{id}/results returns an error for unknown runId")
     void unknownRunIdReturnsError() throws Exception {
-        MvcResult result = mockMvc.perform(get("/api/runs/run-does-not-exist/results"))
-                .andReturn();
-
-        assertThat(result.getResponse().getStatus())
-                .isGreaterThanOrEqualTo(400)
-                .isLessThan(600);
+        mockMvc.perform(get("/api/runs/run-does-not-exist/results"))
+                .andExpect(status().isNotFound());
     }
 
     @Test

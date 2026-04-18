@@ -1,11 +1,9 @@
-# Test profile: uses Testcontainers for PostgreSQL.
-# LlmAdapter is mocked - no real API calls during tests.
 spring:
   datasource:
-    url: jdbc:tc:postgresql:15:///sentinelcore_test
-    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
-    username: test
-    password: test
+    url: jdbc:postgresql://localhost:5432/sentinelcore
+    driver-class-name: org.postgresql.Driver
+    username: sentinelcore
+    password: sentinelcore
   jpa:
     hibernate:
       ddl-auto: validate
