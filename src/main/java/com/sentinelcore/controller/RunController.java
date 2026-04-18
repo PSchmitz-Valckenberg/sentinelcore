@@ -36,9 +36,9 @@ public class RunController {
 
     @PostMapping
     public ResponseEntity<Map<String, String>> createRun(@Valid @RequestBody RunCreateRequest request) {
-        EvaluationRun run = runService.createRun(request.mode(), request.model());
+        EvaluationRun run = runService.createRun(request.mode(), request.model(), request.strategyType());
         return ResponseEntity.status(HttpStatus.CREATED)
-            .body(Map.of("runId", run.getId(), "status", run.getStatus().name()));
+                .body(Map.of("runId", run.getId(), "status", run.getStatus().name()));
     }
 
     @PostMapping("/{id}/execute")
@@ -47,11 +47,11 @@ public class RunController {
         long totalCases = caseRepository.count();
         long completedCases = executionRepository.countByRunId(id);
         return ResponseEntity.ok(new RunExecutionResponse(
-            run.getId(),
-            run.getStatus().name(),
-            run.getMode().name(),
-            totalCases,
-            completedCases));
+                run.getId(),
+                run.getStatus().name(),
+                run.getMode().name(),
+                totalCases,
+                completedCases));
     }
 
     @GetMapping("/{id}/results")
