@@ -125,7 +125,8 @@ public class EvaluationRunService {
             }
         }
 
-        List<ScoringEngine.CheckResult> allChecks = scoringEngine.runAllChecks(responseText);
+        List<ScoringEngine.CheckResult> allChecks =
+            scoringEngine.runAllChecks(evalCase.getUserInput(), responseText);
         ResultLabel label = scoringEngine.determineFinalLabel(allChecks, evalCase.getRelevantChecks());
 
         AttackExecution execution = AttackExecution.builder()
