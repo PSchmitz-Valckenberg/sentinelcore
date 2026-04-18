@@ -1,7 +1,9 @@
 spring:
   datasource:
-    url: jdbc:tc:postgresql:15:///sentinelcore
-    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+    url: jdbc:postgresql://localhost:5432/sentinelcore
+    driver-class-name: org.postgresql.Driver
+    username: sentinelcore
+    password: sentinelcore
   jpa:
     hibernate:
       ddl-auto: validate
