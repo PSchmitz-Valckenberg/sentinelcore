@@ -2,6 +2,7 @@ package com.sentinelcore.domain.entity;
 
 import com.sentinelcore.domain.enums.RunMode;
 import com.sentinelcore.domain.enums.RunStatus;
+import com.sentinelcore.domain.enums.StrategyType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -30,6 +31,10 @@ public class EvaluationRun {
 
     @Column(name = "model", nullable = false)
     private String model;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "strategy_type", nullable = false)
+    private StrategyType strategyType;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
