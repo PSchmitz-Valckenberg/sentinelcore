@@ -1,6 +1,7 @@
 package com.sentinelcore.service;
 
 import com.sentinelcore.domain.entity.Benchmark;
+import com.sentinelcore.domain.entity.BenchmarkRun;
 import com.sentinelcore.domain.entity.EvaluationRun;
 import com.sentinelcore.domain.enums.BenchmarkStatus;
 import com.sentinelcore.domain.enums.RunMode;
@@ -41,7 +42,7 @@ public class BenchmarkService {
         benchmark.setId("benchmark-" + UUID.randomUUID().toString().substring(0, 8));
         benchmark.setModel(model);
                 benchmark.setStrategyTypes(new ArrayList<>(deduped));
-        benchmark.setRunIds(new ArrayList<>());
+                benchmark.setRuns(new ArrayList<>());
         benchmark.setStatus(BenchmarkStatus.CREATED);
                 benchmark.setCreatedAt(LocalDateTime.now());
         return benchmarkRepository.save(benchmark);
@@ -61,24 +62,24 @@ public class BenchmarkService {
                 benchmark.setStartedAt(LocalDateTime.now());
                 benchmarkRepository.saveAndFlush(benchmark);
 
-        List<String> runIds = new ArrayList<>();
+        List<BenchmarkRun> completedRuns = new ArrayList<>();
 
                 try {
                         for (StrategyType strategyType : benchmark.getStrategyTypes()) {
                                 RunMode mode = (strategyType == StrategyType.NONE) ? RunMode.BASELINE : RunMode.DEFENDED;
                                 EvaluationRun run = runService.createRun(mode, benchmark.getModel(), strategyType);
                                 runService.executeRun(run.getId());
-                                runIds.add(run.getId());
+                                completedRuns.add(new BenchmarkRun(strategyType, run.getId()));
                                 log.info("Benchmark {}: completed run {} with strategy {}",
                                                 benchmarkId, run.getId(), strategyType);
                         }
                         benchmark.setStatus(BenchmarkStatus.COMPLETED);
                 } catch (RuntimeException ex) {
                         benchmark.setStatus(BenchmarkStatus.FAILED);
-                        log.error("Benchmark {} failed after {} completed runs", benchmarkId, runIds.size(), ex);
+                        log.error("Benchmark {} failed after {} completed runs", benchmarkId, completedRuns.size(), ex);
                         throw ex;
                 } finally {
-                        benchmark.setRunIds(runIds);
+                        benchmark.setRuns(completedRuns);
                         benchmark.setFinishedAt(LocalDateTime.now());
                         benchmarkRepository.save(benchmark);
         }
@@ -87,7 +88,7 @@ public class BenchmarkService {
                 benchmarkId,
                 BenchmarkStatus.COMPLETED,
                                 benchmark.getStrategyTypes().size(),
-                runIds.size()
+                                completedRuns.size()
         );
     }
 
@@ -96,14 +97,13 @@ public class BenchmarkService {
         Benchmark benchmark = benchmarkRepository.findById(benchmarkId)
                 .orElseThrow(() -> new EntityNotFoundException("Benchmark not found: " + benchmarkId));
 
-                List<String> runIds = benchmark.getRunIds();
-                List<StrategyType> strategyTypes = benchmark.getStrategyTypes();
-
-                List<RunWithMetrics> runMetrics = new ArrayList<>();
-                for (int i = 0; i < runIds.size(); i++) {
-                        RunMetricsResponse metrics = reportingService.getMetrics(runIds.get(i));
-                        runMetrics.add(new RunWithMetrics(runIds.get(i), strategyTypes.get(i), metrics));
-                }
+                List<RunWithMetrics> runMetrics = benchmark.getRuns().stream()
+                        .map(br -> new RunWithMetrics(
+                                br.getRunId(),
+                                br.getStrategyType(),
+                                reportingService.getMetrics(br.getRunId())
+                        ))
+                        .toList();
 
         RunMetricsResponse baseline = runMetrics.stream()
                 .filter(r -> r.strategyType() == StrategyType.NONE)

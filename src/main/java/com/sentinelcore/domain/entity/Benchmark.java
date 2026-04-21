@@ -34,6 +34,7 @@ public class Benchmark {
     )
     @Enumerated(EnumType.STRING)
     @Column(name = "strategy_type")
+        @OrderColumn(name = "strategy_order")
     private List<StrategyType> strategyTypes = new ArrayList<>();
 
     @ElementCollection
@@ -41,8 +42,7 @@ public class Benchmark {
             name = "benchmark_runs",
             joinColumns = @JoinColumn(name = "benchmark_id")
     )
-    @Column(name = "run_id")
-    private List<String> runIds = new ArrayList<>();
+        private List<BenchmarkRun> runs = new ArrayList<>();
 
         @Column(name = "created_at", nullable = false)
         private LocalDateTime createdAt;
