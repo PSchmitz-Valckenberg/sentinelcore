@@ -55,6 +55,7 @@ public class EvaluationRunService {
         return runRepository.save(run);
     }
 
+    @Transactional(readOnly = true)
     public StrategyType getStrategyType(String runId) {
         return runRepository.findById(runId)
                 .orElseThrow(() -> new EntityNotFoundException("Run not found: " + runId))

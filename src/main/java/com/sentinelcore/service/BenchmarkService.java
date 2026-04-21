@@ -5,7 +5,11 @@ import com.sentinelcore.domain.entity.EvaluationRun;
 import com.sentinelcore.domain.enums.BenchmarkStatus;
 import com.sentinelcore.domain.enums.RunMode;
 import com.sentinelcore.domain.enums.StrategyType;
-import com.sentinelcore.dto.*;
+import com.sentinelcore.dto.BenchmarkExecutionResponse;
+import com.sentinelcore.dto.BenchmarkReportResponse;
+import com.sentinelcore.dto.DeltaMetrics;
+import com.sentinelcore.dto.RunComparisonEntry;
+import com.sentinelcore.dto.RunMetricsResponse;
 import com.sentinelcore.repository.BenchmarkRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -13,8 +17,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,46 +32,61 @@ public class BenchmarkService {
     private final EvaluationRunService runService;
     private final ReportingService reportingService;
 
+        @Transactional
     public Benchmark createBenchmark(String model, List<StrategyType> strategyTypes) {
+                LinkedHashSet<StrategyType> deduped = new LinkedHashSet<>(strategyTypes);
+                deduped.add(StrategyType.NONE);
+
         Benchmark benchmark = new Benchmark();
         benchmark.setId("benchmark-" + UUID.randomUUID().toString().substring(0, 8));
         benchmark.setModel(model);
-        benchmark.setStrategyTypes(new ArrayList<>(strategyTypes));
+                benchmark.setStrategyTypes(new ArrayList<>(deduped));
         benchmark.setRunIds(new ArrayList<>());
         benchmark.setStatus(BenchmarkStatus.CREATED);
-        benchmark.setCreatedAt(Instant.now());
+                benchmark.setCreatedAt(LocalDateTime.now());
         return benchmarkRepository.save(benchmark);
     }
 
-    @Transactional
     public BenchmarkExecutionResponse executeBenchmark(String benchmarkId) {
         Benchmark benchmark = benchmarkRepository.findById(benchmarkId)
                 .orElseThrow(() -> new EntityNotFoundException("Benchmark not found: " + benchmarkId));
 
+                if (benchmark.getStatus() != BenchmarkStatus.CREATED) {
+                        throw new IllegalStateException(
+                                        "Benchmark " + benchmarkId + " cannot be executed in status: " + benchmark.getStatus()
+                        );
+                }
+
         benchmark.setStatus(BenchmarkStatus.RUNNING);
-        benchmark.setStartedAt(Instant.now());
-        benchmarkRepository.save(benchmark);
+                benchmark.setStartedAt(LocalDateTime.now());
+                benchmarkRepository.saveAndFlush(benchmark);
 
         List<String> runIds = new ArrayList<>();
 
-        for (StrategyType strategyType : benchmark.getStrategyTypes()) {
-            RunMode mode = (strategyType == StrategyType.NONE) ? RunMode.BASELINE : RunMode.DEFENDED;
-            EvaluationRun run = runService.createRun(mode, benchmark.getModel(), strategyType);
-            runService.executeRun(run.getId());
-            runIds.add(run.getId());
-            log.info("Benchmark {}: completed run {} with strategy {}",
-                    benchmarkId, run.getId(), strategyType);
+                try {
+                        for (StrategyType strategyType : benchmark.getStrategyTypes()) {
+                                RunMode mode = (strategyType == StrategyType.NONE) ? RunMode.BASELINE : RunMode.DEFENDED;
+                                EvaluationRun run = runService.createRun(mode, benchmark.getModel(), strategyType);
+                                runService.executeRun(run.getId());
+                                runIds.add(run.getId());
+                                log.info("Benchmark {}: completed run {} with strategy {}",
+                                                benchmarkId, run.getId(), strategyType);
+                        }
+                        benchmark.setStatus(BenchmarkStatus.COMPLETED);
+                } catch (RuntimeException ex) {
+                        benchmark.setStatus(BenchmarkStatus.FAILED);
+                        log.error("Benchmark {} failed after {} completed runs", benchmarkId, runIds.size(), ex);
+                        throw ex;
+                } finally {
+                        benchmark.setRunIds(runIds);
+                        benchmark.setFinishedAt(LocalDateTime.now());
+                        benchmarkRepository.save(benchmark);
         }
-
-        benchmark.setRunIds(runIds);
-        benchmark.setStatus(BenchmarkStatus.COMPLETED);
-        benchmark.setFinishedAt(Instant.now());
-        benchmarkRepository.save(benchmark);
 
         return new BenchmarkExecutionResponse(
                 benchmarkId,
                 BenchmarkStatus.COMPLETED,
-                runIds.size(),
+                                benchmark.getStrategyTypes().size(),
                 runIds.size()
         );
     }
@@ -76,13 +96,14 @@ public class BenchmarkService {
         Benchmark benchmark = benchmarkRepository.findById(benchmarkId)
                 .orElseThrow(() -> new EntityNotFoundException("Benchmark not found: " + benchmarkId));
 
-        List<RunWithMetrics> runMetrics = benchmark.getRunIds().stream()
-                .map(runId -> {
-                    RunMetricsResponse metrics = reportingService.getMetrics(runId);
-                    StrategyType strategyType = runService.getStrategyType(runId);
-                    return new RunWithMetrics(runId, strategyType, metrics);
-                })
-                .toList();
+                List<String> runIds = benchmark.getRunIds();
+                List<StrategyType> strategyTypes = benchmark.getStrategyTypes();
+
+                List<RunWithMetrics> runMetrics = new ArrayList<>();
+                for (int i = 0; i < runIds.size(); i++) {
+                        RunMetricsResponse metrics = reportingService.getMetrics(runIds.get(i));
+                        runMetrics.add(new RunWithMetrics(runIds.get(i), strategyTypes.get(i), metrics));
+                }
 
         RunMetricsResponse baseline = runMetrics.stream()
                 .filter(r -> r.strategyType() == StrategyType.NONE)
@@ -124,5 +145,6 @@ public class BenchmarkService {
         return Math.round(value * 1000.0) / 1000.0;
     }
 
-    private record RunWithMetrics(String runId, StrategyType strategyType, RunMetricsResponse metrics) {}
+        private record RunWithMetrics(String runId, StrategyType strategyType, RunMetricsResponse metrics) {
+        }
 }

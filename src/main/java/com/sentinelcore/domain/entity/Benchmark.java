@@ -6,7 +6,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,13 +17,14 @@ import java.util.List;
 public class Benchmark {
 
     @Id
+        @Column(name = "id", nullable = false)
     private String id;
 
-    @Column(nullable = false)
+        @Column(name = "model", nullable = false)
     private String model;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+        @Column(name = "status", nullable = false)
     private BenchmarkStatus status;
 
     @ElementCollection
@@ -43,9 +44,12 @@ public class Benchmark {
     @Column(name = "run_id")
     private List<String> runIds = new ArrayList<>();
 
-    @Column(nullable = false)
-    private Instant createdAt;
+        @Column(name = "created_at", nullable = false)
+        private LocalDateTime createdAt;
 
-    private Instant startedAt;
-    private Instant finishedAt;
+        @Column(name = "started_at")
+        private LocalDateTime startedAt;
+
+        @Column(name = "finished_at")
+        private LocalDateTime finishedAt;
 }
