@@ -17,14 +17,14 @@ import java.util.List;
 public class Benchmark {
 
     @Id
-        @Column(name = "id", nullable = false)
+    @Column(name = "id", nullable = false)
     private String id;
 
-        @Column(name = "model", nullable = false)
+    @Column(name = "model", nullable = false)
     private String model;
 
     @Enumerated(EnumType.STRING)
-        @Column(name = "status", nullable = false)
+    @Column(name = "status", nullable = false)
     private BenchmarkStatus status;
 
     @ElementCollection
@@ -33,8 +33,8 @@ public class Benchmark {
             joinColumns = @JoinColumn(name = "benchmark_id")
     )
     @Enumerated(EnumType.STRING)
-    @Column(name = "strategy_type")
-        @OrderColumn(name = "strategy_order")
+    @Column(name = "strategy_type", nullable = false)
+    @OrderColumn(name = "strategy_order")
     private List<StrategyType> strategyTypes = new ArrayList<>();
 
     @ElementCollection

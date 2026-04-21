@@ -26,7 +26,7 @@ public class BenchmarkController {
                 .status(HttpStatus.CREATED)
                 .body(new BenchmarkCreateResponse(
                         benchmark.getId(),
-                        benchmark.getStatus(),
+                    benchmark.getStatus().name(),
                         benchmark.getStrategyTypes()
                 ));
     }
