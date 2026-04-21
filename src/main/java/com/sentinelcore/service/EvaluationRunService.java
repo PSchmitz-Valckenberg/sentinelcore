@@ -55,6 +55,12 @@ public class EvaluationRunService {
         return runRepository.save(run);
     }
 
+    public StrategyType getStrategyType(String runId) {
+        return runRepository.findById(runId)
+                .orElseThrow(() -> new EntityNotFoundException("Run not found: " + runId))
+                .getStrategyType();
+    }
+
     // V1: single transaction over all 25 cases is acceptable.
     // Per-case isolation (REQUIRES_NEW) is a V2 improvement.
     @Transactional
