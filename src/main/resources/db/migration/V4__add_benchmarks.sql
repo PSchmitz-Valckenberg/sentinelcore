@@ -11,7 +11,8 @@ CREATE TABLE benchmark_strategies (
     benchmark_id    VARCHAR(255) NOT NULL REFERENCES benchmarks(id),
     strategy_type   VARCHAR(50)  NOT NULL,
     strategy_order  INTEGER      NOT NULL,
-    PRIMARY KEY (benchmark_id, strategy_type)
+    PRIMARY KEY (benchmark_id, strategy_type),
+    UNIQUE (benchmark_id, strategy_order)
 );
 
 CREATE TABLE benchmark_runs (
