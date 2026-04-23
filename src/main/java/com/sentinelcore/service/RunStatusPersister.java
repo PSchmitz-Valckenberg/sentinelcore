@@ -29,12 +29,13 @@ public class RunStatusPersister {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void persistFailure(String runId, Instant startedAt, String caseSuiteFingerprint) {
-        runRepository.findById(runId).ifPresent(run -> {
-            run.setStatus(RunStatus.FAILED);
-            run.setStartedAt(startedAt);
-            run.setCaseSuiteFingerprint(caseSuiteFingerprint);
-            run.setFinishedAt(Instant.now());
-            runRepository.save(run);
-        });
+        var run = runRepository.findById(runId)
+                .orElseThrow(() -> new IllegalStateException("Evaluation run not found for failure persistence: " + runId));
+
+        run.setStatus(RunStatus.FAILED);
+        run.setStartedAt(startedAt);
+        run.setCaseSuiteFingerprint(caseSuiteFingerprint);
+        run.setFinishedAt(Instant.now());
+        runRepository.save(run);
     }
 }
