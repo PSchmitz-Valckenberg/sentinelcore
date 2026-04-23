@@ -82,14 +82,18 @@ public class EvaluationRunService {
         run.setStartedAt(startedAt);
         runRepository.save(run);
 
-        List<EvaluationCase> cases = caseRepository.findAll();
-        String fingerprint = caseSuiteHasher.compute(cases);
-        run.setCaseSuiteFingerprint(fingerprint);
-
-        log.info("Executing run {} with {} cases in {} mode (suite fingerprint: {})",
-                runId, cases.size(), run.getMode(), fingerprint);
+        // Declared outside try so it is accessible in the catch block even if
+        // fingerprint computation itself throws before the assignment completes.
+        String fingerprint = null;
 
         try {
+            List<EvaluationCase> cases = caseRepository.findAll();
+            fingerprint = caseSuiteHasher.compute(cases);
+            run.setCaseSuiteFingerprint(fingerprint);
+
+            log.info("Executing run {} with {} cases in {} mode (suite fingerprint: {})",
+                    runId, cases.size(), run.getMode(), fingerprint);
+
             DefenseStrategy strategy = strategyRegistry.get(run.getStrategyType());
             for (EvaluationCase evalCase : cases) {
                 processCase(run, evalCase, strategy);
@@ -107,6 +111,7 @@ public class EvaluationRunService {
             }
             throw new RuntimeException("Run " + runId + " failed during execution", e);
         }
+
         run.setFinishedAt(Instant.now());
         return runRepository.save(run);
     }
