@@ -51,9 +51,23 @@ class CaseSuiteHasherTest {
     }
 
     @Test
-    void hashIs64HexChars() {
+    void hashIsLowerHex64Chars() {
         List<EvaluationCase> cases = List.of(caseWith("CASE-001", "test"));
-        assertThat(hasher.compute(cases)).hasSize(64);
+        String hash = hasher.compute(cases);
+        // SHA-256 always produces exactly 64 lowercase hex characters
+        assertThat(hash).matches("[0-9a-f]{64}");
+    }
+
+    @Test
+    void separatorAmbiguityDoesNotProduceCollision() {
+        // Without length-prefix encoding these two would hash to the same payload:
+        // id="A:B", input="C"  ->  "A:B:C"
+        // id="A",   input="B:C" ->  "A:B:C"
+        EvaluationCase case1 = caseWith("A:B", "C");
+        EvaluationCase case2 = caseWith("A", "B:C");
+
+        assertThat(hasher.compute(List.of(case1)))
+                .isNotEqualTo(hasher.compute(List.of(case2)));
     }
 
     private EvaluationCase caseWith(String id, String userInput) {

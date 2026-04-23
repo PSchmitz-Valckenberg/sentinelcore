@@ -3,6 +3,7 @@ package com.sentinelcore.service;
 import com.sentinelcore.defense.strategy.DefenseStrategy;
 import com.sentinelcore.defense.strategy.DefenseStrategyRegistry;
 import com.sentinelcore.defense.strategy.StrategyExecutionResult;
+import com.sentinelcore.defense.strategy.SystemPromptBuilder;
 import com.sentinelcore.domain.config.SystemPromptConfig;
 import com.sentinelcore.domain.entity.AttackExecution;
 import com.sentinelcore.domain.entity.EvaluationCase;
@@ -20,6 +21,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -40,6 +42,7 @@ public class EvaluationRunService {
     private final ScoringEngine scoringEngine;
     private final DefenseStrategyRegistry strategyRegistry;
     private final SystemPromptConfig systemPromptConfig;
+    private final SystemPromptBuilder systemPromptBuilder;
     private final CaseSuiteHasher caseSuiteHasher;
 
     public EvaluationRun createRun(RunMode mode, String model, StrategyType strategyType) {
@@ -47,28 +50,33 @@ public class EvaluationRunService {
                 ? strategyType
                 : (mode == RunMode.DEFENDED ? StrategyType.INPUT_OUTPUT : StrategyType.NONE);
 
+        // Snapshot the fully-built system prompt — including the appended canary token —
+        // so the run record reflects exactly what was sent to the LLM.
+        String builtPrompt = systemPromptBuilder.build();
+
         EvaluationRun run = EvaluationRun.builder()
                 .id("run-" + UUID.randomUUID().toString().substring(0, 8))
                 .mode(mode)
                 .status(RunStatus.CREATED)
                 .model(model)
                 .strategyType(resolved)
-            .systemPromptSnapshot(systemPromptConfig.text())
+            .systemPromptSnapshot(builtPrompt)
             .canaryTokenSnapshot(systemPromptConfig.canaryToken())
             .createdAt(Instant.now())
                 .build();
+
         return runRepository.save(run);
     }
 
-    // V1: single transaction over all 25 cases is acceptable.
-    // Per-case isolation (REQUIRES_NEW) is a V2 improvement.
     @Transactional
     public EvaluationRun executeRun(String runId) {
         EvaluationRun run = runRepository.findById(runId)
                 .orElseThrow(() -> new EntityNotFoundException("Run not found: " + runId));
+
         if (run.getStatus() != RunStatus.CREATED) {
             throw new IllegalStateException("Run already started or completed");
         }
+
         run.setStatus(RunStatus.RUNNING);
         run.setStartedAt(Instant.now());
         runRepository.save(run);
@@ -78,7 +86,7 @@ public class EvaluationRunService {
         run.setCaseSuiteFingerprint(fingerprint);
 
         log.info("Executing run {} with {} cases in {} mode (suite fingerprint: {})",
-            runId, cases.size(), run.getMode(), fingerprint);
+                runId, cases.size(), run.getMode(), fingerprint);
 
         try {
             DefenseStrategy strategy = strategyRegistry.get(run.getStrategyType());
@@ -88,9 +96,10 @@ public class EvaluationRunService {
             run.setStatus(RunStatus.COMPLETED);
         } catch (Exception e) {
             log.error("Run {} failed during execution", runId, e);
+            // Persist FAILED status in a separate transaction so it is not rolled back
+            // together with the outer @Transactional when we rethrow.
+            persistFailureStatus(runId);
             run.setStatus(RunStatus.FAILED);
-            run.setFinishedAt(Instant.now());
-            runRepository.save(run);
             if (e instanceof RuntimeException runtimeException) {
                 throw runtimeException;
             }
@@ -98,6 +107,20 @@ public class EvaluationRunService {
         }
         run.setFinishedAt(Instant.now());
         return runRepository.save(run);
+    }
+
+    /**
+     * Persists FAILED status + finishedAt in a dedicated REQUIRES_NEW transaction.
+     * This ensures failure state survives even when the outer executeRun transaction
+     * is rolled back on exception.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void persistFailureStatus(String runId) {
+        runRepository.findById(runId).ifPresent(run -> {
+            run.setStatus(RunStatus.FAILED);
+            run.setFinishedAt(Instant.now());
+            runRepository.save(run);
+        });
     }
 
     private void processCase(EvaluationRun run, EvaluationCase evalCase, DefenseStrategy strategy) {
