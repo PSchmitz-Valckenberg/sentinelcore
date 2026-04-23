@@ -60,9 +60,9 @@ public class EvaluationRunService {
                 .status(RunStatus.CREATED)
                 .model(model)
                 .strategyType(resolved)
-            .systemPromptSnapshot(builtPrompt)
-            .canaryTokenSnapshot(systemPromptConfig.canaryToken())
-            .createdAt(Instant.now())
+                .systemPromptSnapshot(builtPrompt)
+                .canaryTokenSnapshot(systemPromptConfig.canaryToken())
+                .createdAt(Instant.now())
                 .build();
 
         return runRepository.save(run);
