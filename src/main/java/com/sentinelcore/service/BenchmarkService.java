@@ -81,7 +81,7 @@ public class BenchmarkService {
             throw ex;
         } finally {
             benchmark.setRuns(completedRuns);
-                        benchmark.setFinishedAt(Instant.now());
+            benchmark.setFinishedAt(Instant.now());
             benchmarkRepository.save(benchmark);
         }
 
