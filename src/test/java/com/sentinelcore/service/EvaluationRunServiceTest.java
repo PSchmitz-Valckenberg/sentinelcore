@@ -43,7 +43,7 @@ class EvaluationRunServiceTest {
     @Mock DefenseStrategy defenseStrategy;
     @Mock CaseSuiteHasher caseSuiteHasher;
     @Mock SystemPromptBuilder systemPromptBuilder;
-        @Mock RunStatusPersister runStatusPersister;
+    @Mock RunStatusPersister runStatusPersister;
 
     private ScoringEngine scoringEngine;
     private EvaluationRunService service;
