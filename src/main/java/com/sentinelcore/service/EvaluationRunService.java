@@ -21,7 +21,6 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -44,6 +43,7 @@ public class EvaluationRunService {
     private final SystemPromptConfig systemPromptConfig;
     private final SystemPromptBuilder systemPromptBuilder;
     private final CaseSuiteHasher caseSuiteHasher;
+    private final RunStatusPersister runStatusPersister;
 
     public EvaluationRun createRun(RunMode mode, String model, StrategyType strategyType) {
         StrategyType resolved = strategyType != null
@@ -77,8 +77,9 @@ public class EvaluationRunService {
             throw new IllegalStateException("Run already started or completed");
         }
 
+        Instant startedAt = Instant.now();
         run.setStatus(RunStatus.RUNNING);
-        run.setStartedAt(Instant.now());
+        run.setStartedAt(startedAt);
         runRepository.save(run);
 
         List<EvaluationCase> cases = caseRepository.findAll();
@@ -96,9 +97,10 @@ public class EvaluationRunService {
             run.setStatus(RunStatus.COMPLETED);
         } catch (Exception e) {
             log.error("Run {} failed during execution", runId, e);
-            // Persist FAILED status in a separate transaction so it is not rolled back
-            // together with the outer @Transactional when we rethrow.
-            persistFailureStatus(runId);
+            // Delegate to a separate bean so REQUIRES_NEW is applied through the Spring proxy.
+            // This also persists startedAt and caseSuiteFingerprint, which would otherwise
+            // be lost when the outer @Transactional rolls back on exception.
+            runStatusPersister.persistFailure(runId, startedAt, fingerprint);
             run.setStatus(RunStatus.FAILED);
             if (e instanceof RuntimeException runtimeException) {
                 throw runtimeException;
@@ -107,20 +109,6 @@ public class EvaluationRunService {
         }
         run.setFinishedAt(Instant.now());
         return runRepository.save(run);
-    }
-
-    /**
-     * Persists FAILED status + finishedAt in a dedicated REQUIRES_NEW transaction.
-     * This ensures failure state survives even when the outer executeRun transaction
-     * is rolled back on exception.
-     */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void persistFailureStatus(String runId) {
-        runRepository.findById(runId).ifPresent(run -> {
-            run.setStatus(RunStatus.FAILED);
-            run.setFinishedAt(Instant.now());
-            runRepository.save(run);
-        });
     }
 
     private void processCase(EvaluationRun run, EvaluationCase evalCase, DefenseStrategy strategy) {

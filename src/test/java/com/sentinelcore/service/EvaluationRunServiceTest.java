@@ -43,6 +43,7 @@ class EvaluationRunServiceTest {
     @Mock DefenseStrategy defenseStrategy;
     @Mock CaseSuiteHasher caseSuiteHasher;
     @Mock SystemPromptBuilder systemPromptBuilder;
+        @Mock RunStatusPersister runStatusPersister;
 
     private ScoringEngine scoringEngine;
     private EvaluationRunService service;
@@ -60,7 +61,7 @@ class EvaluationRunServiceTest {
         service = new EvaluationRunService(
                 runRepository, executionRepository, scoreDetailRepository,
                 caseRepository, scoringEngine, strategyRegistry, config,
-                systemPromptBuilder, caseSuiteHasher);
+                systemPromptBuilder, caseSuiteHasher, runStatusPersister);
 
         lenient().when(caseSuiteHasher.compute(any())).thenReturn("a".repeat(64));
     }
@@ -210,8 +211,8 @@ class EvaluationRunServiceTest {
     }
 
     @Test
-    @DisplayName("executeRun marks run FAILED and rethrows on LLM exception")
-    void executeRunMarksFailed() {
+        @DisplayName("executeRun delegates failure persistence to RunStatusPersister on exception")
+        void executeRunDelegatesToRunStatusPersisterOnFailure() {
         EvaluationRun run = buildRun(RunStatus.CREATED, RunMode.BASELINE, StrategyType.NONE);
         when(runRepository.findById("run-001")).thenReturn(Optional.of(run));
         when(runRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -223,8 +224,14 @@ class EvaluationRunServiceTest {
         when(defenseStrategy.execute(any(), any())).thenThrow(new RuntimeException("LLM timeout"));
 
         assertThatThrownBy(() -> service.executeRun("run-001"))
-                .isInstanceOf(RuntimeException.class);
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("LLM timeout");
+
+        // The in-memory run status is also set to FAILED for consistency
         assertThat(run.getStatus()).isEqualTo(RunStatus.FAILED);
+
+        // Verify RunStatusPersister was called — it owns the actual DB persistence via REQUIRES_NEW
+        verify(runStatusPersister).persistFailure(eq("run-001"), any(Instant.class), any());
     }
 
     // ---- Helpers ----
@@ -240,8 +247,8 @@ class EvaluationRunServiceTest {
                 .build();
     }
 
-    private EvaluationCase buildCase(String id, EvaluationCaseType type,
-            String userInput, Set<CheckType> checks) {
+        private EvaluationCase buildCase(String id, EvaluationCaseType type,
+                                                                         String userInput, Set<CheckType> checks) {
         return EvaluationCase.builder()
                 .id(id)
                 .caseType(type)
