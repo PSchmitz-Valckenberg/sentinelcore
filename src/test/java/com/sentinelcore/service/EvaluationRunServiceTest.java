@@ -41,8 +41,8 @@ class EvaluationRunServiceTest {
     @Mock EvaluationCaseRepository caseRepository;
     @Mock DefenseStrategyRegistry strategyRegistry;
     @Mock DefenseStrategy defenseStrategy;
-        @Mock CaseSuiteHasher caseSuiteHasher;
-        @Mock SystemPromptBuilder systemPromptBuilder;
+    @Mock CaseSuiteHasher caseSuiteHasher;
+    @Mock SystemPromptBuilder systemPromptBuilder;
 
     private ScoringEngine scoringEngine;
     private EvaluationRunService service;
