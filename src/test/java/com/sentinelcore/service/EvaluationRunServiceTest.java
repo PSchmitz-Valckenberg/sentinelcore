@@ -56,7 +56,7 @@ class EvaluationRunServiceTest {
     void setUp() {
         SystemPromptConfig config = new SystemPromptConfig(SYSTEM_PROMPT, CANARY);
         scoringEngine = new ScoringEngine(config);
-                lenient().when(systemPromptBuilder.build()).thenReturn(BUILT_PROMPT);
+        lenient().when(systemPromptBuilder.build()).thenReturn(BUILT_PROMPT);
         service = new EvaluationRunService(
                 runRepository, executionRepository, scoreDetailRepository,
                 caseRepository, scoringEngine, strategyRegistry, config,
