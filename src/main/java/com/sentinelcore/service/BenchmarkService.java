@@ -18,7 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -45,7 +45,7 @@ public class BenchmarkService {
         benchmark.setStrategyTypes(new ArrayList<>(deduped));
         benchmark.setRuns(new ArrayList<>());
         benchmark.setStatus(BenchmarkStatus.CREATED);
-        benchmark.setCreatedAt(LocalDateTime.now());
+        benchmark.setCreatedAt(Instant.now());
         return benchmarkRepository.save(benchmark);
     }
 
@@ -60,7 +60,7 @@ public class BenchmarkService {
         }
 
         benchmark.setStatus(BenchmarkStatus.RUNNING);
-        benchmark.setStartedAt(LocalDateTime.now());
+        benchmark.setStartedAt(Instant.now());
         benchmarkRepository.saveAndFlush(benchmark);
 
         List<BenchmarkRun> completedRuns = new ArrayList<>();
@@ -81,7 +81,7 @@ public class BenchmarkService {
             throw ex;
         } finally {
             benchmark.setRuns(completedRuns);
-            benchmark.setFinishedAt(LocalDateTime.now());
+            benchmark.setFinishedAt(Instant.now());
             benchmarkRepository.save(benchmark);
         }
 

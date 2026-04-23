@@ -1,6 +1,6 @@
 package com.sentinelcore.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 public record RunResultResponse(
@@ -8,8 +8,8 @@ public record RunResultResponse(
     String status,
     String mode,
     String model,
-    LocalDateTime startedAt,
-    LocalDateTime finishedAt,
+    Instant startedAt,
+    Instant finishedAt,
     long totalCases,
     long completedCases,
     List<ExecutionDto> executions

@@ -6,7 +6,7 @@ import com.sentinelcore.domain.enums.StrategyType;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "evaluation_runs")
@@ -36,12 +36,23 @@ public class EvaluationRun {
     @Column(name = "strategy_type", nullable = false)
     private StrategyType strategyType;
 
+    // Reproducibility snapshot — captured at createRun() time
+    @Column(name = "system_prompt_snapshot", columnDefinition = "TEXT")
+    private String systemPromptSnapshot;
+
+    @Column(name = "canary_token_snapshot", length = 200)
+    private String canaryTokenSnapshot;
+
+    // Captured at executeRun() time — SHA-256 over all case IDs + userInputs
+    @Column(name = "case_suite_fingerprint", length = 64)
+    private String caseSuiteFingerprint;
+
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Column(name = "started_at")
-    private LocalDateTime startedAt;
+    private Instant startedAt;
 
     @Column(name = "finished_at")
-    private LocalDateTime finishedAt;
+    private Instant finishedAt;
 }

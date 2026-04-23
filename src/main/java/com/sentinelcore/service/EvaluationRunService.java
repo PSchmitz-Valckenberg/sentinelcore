@@ -3,6 +3,8 @@ package com.sentinelcore.service;
 import com.sentinelcore.defense.strategy.DefenseStrategy;
 import com.sentinelcore.defense.strategy.DefenseStrategyRegistry;
 import com.sentinelcore.defense.strategy.StrategyExecutionResult;
+import com.sentinelcore.defense.strategy.SystemPromptBuilder;
+import com.sentinelcore.domain.config.SystemPromptConfig;
 import com.sentinelcore.domain.entity.AttackExecution;
 import com.sentinelcore.domain.entity.EvaluationCase;
 import com.sentinelcore.domain.entity.EvaluationRun;
@@ -21,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -38,11 +40,19 @@ public class EvaluationRunService {
     private final EvaluationCaseRepository caseRepository;
     private final ScoringEngine scoringEngine;
     private final DefenseStrategyRegistry strategyRegistry;
+    private final SystemPromptConfig systemPromptConfig;
+    private final SystemPromptBuilder systemPromptBuilder;
+    private final CaseSuiteHasher caseSuiteHasher;
+    private final RunStatusPersister runStatusPersister;
 
     public EvaluationRun createRun(RunMode mode, String model, StrategyType strategyType) {
         StrategyType resolved = strategyType != null
                 ? strategyType
                 : (mode == RunMode.DEFENDED ? StrategyType.INPUT_OUTPUT : StrategyType.NONE);
+
+        // Snapshot the fully-built system prompt — including the appended canary token —
+        // so the run record reflects exactly what was sent to the LLM.
+        String builtPrompt = systemPromptBuilder.build();
 
         EvaluationRun run = EvaluationRun.builder()
                 .id("run-" + UUID.randomUUID().toString().substring(0, 8))
@@ -50,28 +60,40 @@ public class EvaluationRunService {
                 .status(RunStatus.CREATED)
                 .model(model)
                 .strategyType(resolved)
-                .createdAt(LocalDateTime.now())
+                .systemPromptSnapshot(builtPrompt)
+                .canaryTokenSnapshot(systemPromptConfig.canaryToken())
+                .createdAt(Instant.now())
                 .build();
+
         return runRepository.save(run);
     }
 
-    // V1: single transaction over all 25 cases is acceptable.
-    // Per-case isolation (REQUIRES_NEW) is a V2 improvement.
     @Transactional
     public EvaluationRun executeRun(String runId) {
         EvaluationRun run = runRepository.findById(runId)
                 .orElseThrow(() -> new EntityNotFoundException("Run not found: " + runId));
+
         if (run.getStatus() != RunStatus.CREATED) {
             throw new IllegalStateException("Run already started or completed");
         }
+
+        Instant startedAt = Instant.now();
         run.setStatus(RunStatus.RUNNING);
-        run.setStartedAt(LocalDateTime.now());
+        run.setStartedAt(startedAt);
         runRepository.save(run);
 
-        List<EvaluationCase> cases = caseRepository.findAll();
-        log.info("Executing run {} with {} cases in {} mode", runId, cases.size(), run.getMode());
+        // Declared outside try so it is accessible in the catch block even if
+        // fingerprint computation itself throws before the assignment completes.
+        String fingerprint = null;
 
         try {
+            List<EvaluationCase> cases = caseRepository.findAll();
+            fingerprint = caseSuiteHasher.compute(cases);
+            run.setCaseSuiteFingerprint(fingerprint);
+
+            log.info("Executing run {} with {} cases in {} mode (suite fingerprint: {})",
+                    runId, cases.size(), run.getMode(), fingerprint);
+
             DefenseStrategy strategy = strategyRegistry.get(run.getStrategyType());
             for (EvaluationCase evalCase : cases) {
                 processCase(run, evalCase, strategy);
@@ -79,15 +101,18 @@ public class EvaluationRunService {
             run.setStatus(RunStatus.COMPLETED);
         } catch (Exception e) {
             log.error("Run {} failed during execution", runId, e);
+            // Delegate to a separate bean so REQUIRES_NEW is applied through the Spring proxy.
+            // This also persists startedAt and caseSuiteFingerprint, which would otherwise
+            // be lost when the outer @Transactional rolls back on exception.
+            runStatusPersister.persistFailure(runId, startedAt, fingerprint);
             run.setStatus(RunStatus.FAILED);
-            run.setFinishedAt(LocalDateTime.now());
-            runRepository.save(run);
             if (e instanceof RuntimeException runtimeException) {
                 throw runtimeException;
             }
             throw new RuntimeException("Run " + runId + " failed during execution", e);
         }
-        run.setFinishedAt(LocalDateTime.now());
+
+        run.setFinishedAt(Instant.now());
         return runRepository.save(run);
     }
 
