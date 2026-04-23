@@ -3,6 +3,7 @@ package com.sentinelcore.service;
 import com.sentinelcore.defense.strategy.DefenseStrategy;
 import com.sentinelcore.defense.strategy.DefenseStrategyRegistry;
 import com.sentinelcore.defense.strategy.StrategyExecutionResult;
+import com.sentinelcore.domain.config.SystemPromptConfig;
 import com.sentinelcore.domain.entity.AttackExecution;
 import com.sentinelcore.domain.entity.EvaluationCase;
 import com.sentinelcore.domain.entity.EvaluationRun;
@@ -21,7 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -38,6 +39,8 @@ public class EvaluationRunService {
     private final EvaluationCaseRepository caseRepository;
     private final ScoringEngine scoringEngine;
     private final DefenseStrategyRegistry strategyRegistry;
+    private final SystemPromptConfig systemPromptConfig;
+    private final CaseSuiteHasher caseSuiteHasher;
 
     public EvaluationRun createRun(RunMode mode, String model, StrategyType strategyType) {
         StrategyType resolved = strategyType != null
@@ -50,7 +53,9 @@ public class EvaluationRunService {
                 .status(RunStatus.CREATED)
                 .model(model)
                 .strategyType(resolved)
-                .createdAt(LocalDateTime.now())
+            .systemPromptSnapshot(systemPromptConfig.text())
+            .canaryTokenSnapshot(systemPromptConfig.canaryToken())
+            .createdAt(Instant.now())
                 .build();
         return runRepository.save(run);
     }
@@ -65,11 +70,15 @@ public class EvaluationRunService {
             throw new IllegalStateException("Run already started or completed");
         }
         run.setStatus(RunStatus.RUNNING);
-        run.setStartedAt(LocalDateTime.now());
+        run.setStartedAt(Instant.now());
         runRepository.save(run);
 
         List<EvaluationCase> cases = caseRepository.findAll();
-        log.info("Executing run {} with {} cases in {} mode", runId, cases.size(), run.getMode());
+        String fingerprint = caseSuiteHasher.compute(cases);
+        run.setCaseSuiteFingerprint(fingerprint);
+
+        log.info("Executing run {} with {} cases in {} mode (suite fingerprint: {})",
+            runId, cases.size(), run.getMode(), fingerprint);
 
         try {
             DefenseStrategy strategy = strategyRegistry.get(run.getStrategyType());
@@ -80,14 +89,14 @@ public class EvaluationRunService {
         } catch (Exception e) {
             log.error("Run {} failed during execution", runId, e);
             run.setStatus(RunStatus.FAILED);
-            run.setFinishedAt(LocalDateTime.now());
+            run.setFinishedAt(Instant.now());
             runRepository.save(run);
             if (e instanceof RuntimeException runtimeException) {
                 throw runtimeException;
             }
             throw new RuntimeException("Run " + runId + " failed during execution", e);
         }
-        run.setFinishedAt(LocalDateTime.now());
+        run.setFinishedAt(Instant.now());
         return runRepository.save(run);
     }
 

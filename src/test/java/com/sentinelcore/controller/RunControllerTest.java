@@ -15,7 +15,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -104,7 +104,7 @@ class RunControllerTest {
         run.setModel("gemini-2.0-flash");
         run.setStrategyType(strategyType);
         run.setStatus(RunStatus.CREATED);
-        run.setCreatedAt(LocalDateTime.now());
+        run.setCreatedAt(Instant.now());
         return run;
     }
 }

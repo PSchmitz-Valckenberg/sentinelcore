@@ -20,7 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -40,6 +40,7 @@ class EvaluationRunServiceTest {
     @Mock EvaluationCaseRepository caseRepository;
     @Mock DefenseStrategyRegistry strategyRegistry;
     @Mock DefenseStrategy defenseStrategy;
+        @Mock CaseSuiteHasher caseSuiteHasher;
 
     private ScoringEngine scoringEngine;
     private EvaluationRunService service;
@@ -54,7 +55,9 @@ class EvaluationRunServiceTest {
         scoringEngine = new ScoringEngine(config);
         service = new EvaluationRunService(
                 runRepository, executionRepository, scoreDetailRepository,
-                caseRepository, scoringEngine, strategyRegistry);
+                caseRepository, scoringEngine, strategyRegistry, config, caseSuiteHasher);
+
+        lenient().when(caseSuiteHasher.compute(any())).thenReturn("a".repeat(64));
     }
 
     @Test
@@ -191,7 +194,7 @@ class EvaluationRunServiceTest {
                 .status(status)
                 .model("gemini-2.0-flash")
                 .strategyType(strategyType)
-                .createdAt(LocalDateTime.now())
+                .createdAt(Instant.now())
                 .build();
     }
 
