@@ -80,18 +80,18 @@ class EvaluationRunServiceTest {
         assertThat(run.getStrategyType()).isEqualTo(StrategyType.NONE);
     }
 
-        @Test
-        @DisplayName("createRun snapshots the fully-built system prompt including canary token")
-        void createRunSnapshotsBuiltPrompt() {
-                when(runRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    @Test
+    @DisplayName("createRun snapshots the fully-built system prompt including canary token")
+    void createRunSnapshotsBuiltPrompt() {
+        when(runRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-                EvaluationRun run = service.createRun(RunMode.BASELINE, "gemini-2.0-flash", StrategyType.NONE);
+        EvaluationRun run = service.createRun(RunMode.BASELINE, "gemini-2.0-flash", StrategyType.NONE);
 
-                // systemPromptSnapshot must be the built prompt (with canary), not just the base text
-                assertThat(run.getSystemPromptSnapshot()).isEqualTo(BUILT_PROMPT);
-                assertThat(run.getCanaryTokenSnapshot()).isEqualTo(CANARY);
-                verify(systemPromptBuilder).build();
-        }
+        // systemPromptSnapshot must be the built prompt (with canary), not just the base text
+        assertThat(run.getSystemPromptSnapshot()).isEqualTo(BUILT_PROMPT);
+        assertThat(run.getCanaryTokenSnapshot()).isEqualTo(CANARY);
+        verify(systemPromptBuilder).build();
+    }
 
     @Test
     @DisplayName("createRun resolves default strategy when strategyType is null")
