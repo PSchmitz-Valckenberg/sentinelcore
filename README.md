@@ -1,5 +1,7 @@
 # SentinelCore
 
+[![CI](https://github.com/PSchmitz-Valckenberg/sentinelcore/actions/workflows/ci.yml/badge.svg)](https://github.com/PSchmitz-Valckenberg/sentinelcore/actions/workflows/ci.yml)
+
 Reproducible evaluation of defense effectiveness and utility tradeoffs in LLM-based applications.
 
 ## What It Does
