@@ -1,9 +1,13 @@
 spring:
+  # Intentionally invalid datasource defaults. Without these, Spring would
+  # merge in the localhost:5432 datasource from application.yml whenever the
+  # test profile is active, silently connecting tests to a developer's local
+  # database. SentinelCoreIntegrationTest overrides these at runtime via
+  # @DynamicPropertySource with the Testcontainers-managed Postgres.
   datasource:
-    url: jdbc:postgresql://localhost:5432/sentinelcore
-    driver-class-name: org.postgresql.Driver
-    username: sentinelcore
-    password: sentinelcore
+    url: jdbc:postgresql://invalid-test-host:1/invalid-test-db
+    username: invalid-test-user
+    password: invalid-test-password
   jpa:
     hibernate:
       ddl-auto: validate
@@ -11,6 +15,11 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    # Defense-in-depth: if a misconfigured test ever did reach a real database,
+    # Flyway must never drop its schema. Testcontainers gives every run a fresh
+    # DB, so clean-on-validation-error is never needed in the test profile.
+    clean-disabled: true
+    clean-on-validation-error: false
 
 sentinelcore:
   llm:

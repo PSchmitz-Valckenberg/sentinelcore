@@ -10,8 +10,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.sentinelcore.llm.LlmAdapter;
 import com.sentinelcore.llm.dto.LlmResponse;
@@ -25,20 +30,30 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Integration test for the full evaluation pipeline.
  *
- * Uses @SpringBootTest to load the full application context with a real
- * PostgreSQL database (configured via application-test.yml).
- * The LlmAdapter is mocked to avoid real API calls.
+ * Boots the full Spring context against a disposable PostgreSQL instance
+ * managed by Testcontainers — no local database required. The LlmAdapter
+ * is mocked to keep the test hermetic.
  *
- * This test verifies:
- * - A run can be created via POST /api/runs
- * - The run can be executed via POST /api/runs/{id}/execute
- * - Results are retrievable via GET /api/runs/{id}/results
- * - Metrics are retrievable via GET /api/runs/{id}/report
+ * Requires a running Docker daemon on the host (or a configured
+ * DOCKER_HOST). CI is expected to provide Docker.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Testcontainers
 class SentinelCoreIntegrationTest {
+
+    @Container
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+
+    @DynamicPropertySource
+    static void datasourceProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES::getUsername);
+        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
+    }
+
     @Autowired
     MockMvc mockMvc;
 
