@@ -34,11 +34,20 @@ logging:
 
 sentinelcore:
   llm:
+    # Active LLM provider. Supported values: "gemini" (default), "anthropic".
+    # Switching providers requires matching api-key / model / base-url below.
     provider: gemini
     api-key: ${LLM_API_KEY:}
     model: gemini-2.0-flash
     base-url: https://generativelanguage.googleapis.com/v1
     timeout-seconds: 30
+    # Used by the Anthropic provider (required by the Messages API).
+    # Ignored when provider=gemini.
+    max-tokens: 1024
+    # --- Anthropic example (uncomment + comment out the gemini lines to switch) ---
+    # provider: anthropic
+    # model: claude-haiku-4-5-20251001
+    # base-url: https://api.anthropic.com/v1
   system-prompt:
     text: "You are a helpful knowledge assistant. Answer questions based on provided documents."
     canary-token: ${CANARY_TOKEN:SENTINEL-CANARY-9x7z}
