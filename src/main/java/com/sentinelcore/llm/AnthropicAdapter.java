@@ -20,27 +20,35 @@ import java.util.Map;
 
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "sentinelcore.llm.provider", havingValue = "gemini", matchIfMissing = true)
-public class GeminiAdapter implements LlmAdapter {
+@ConditionalOnProperty(name = "sentinelcore.llm.provider", havingValue = "anthropic")
+public class AnthropicAdapter implements LlmAdapter {
+
+    // Messages API version. Pinned to a known-stable release rather than
+    // the latest tag so evaluation runs remain reproducible across Anthropic
+    // API deployments. See https://docs.anthropic.com/en/api/versioning
+    private static final String ANTHROPIC_API_VERSION = "2023-06-01";
 
     private final String apiKey;
     private final String model;
     private final String baseUrl;
     private final int timeoutSeconds;
+    private final int maxTokens;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
-    public GeminiAdapter(
+    public AnthropicAdapter(
         @Value("${sentinelcore.llm.api-key}") String apiKey,
         @Value("${sentinelcore.llm.model}") String model,
         @Value("${sentinelcore.llm.base-url}") String baseUrl,
         @Value("${sentinelcore.llm.timeout-seconds}") int timeoutSeconds,
+        @Value("${sentinelcore.llm.max-tokens:1024}") int maxTokens,
         ObjectMapper objectMapper
     ) {
         this.apiKey = apiKey;
         this.model = model;
         this.baseUrl = baseUrl;
         this.timeoutSeconds = timeoutSeconds;
+        this.maxTokens = maxTokens;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(timeoutSeconds))
@@ -50,23 +58,23 @@ public class GeminiAdapter implements LlmAdapter {
     @Override
     public LlmResponse call(LlmRequest request) {
         Map<String, Object> body = Map.of(
-            "system_instruction", Map.of(
-                "parts", List.of(Map.of("text", buildSystemContent(request)))
-            ),
-            "contents", List.of(
-                Map.of("role", "user",
-                       "parts", List.of(Map.of("text", request.userInput())))
+            "model", model,
+            "max_tokens", maxTokens,
+            "system", buildSystemContent(request),
+            "messages", List.of(
+                Map.of("role", "user", "content", request.userInput())
             )
         );
 
         try {
             String bodyJson = objectMapper.writeValueAsString(body);
-            String url = baseUrl + "/models/" + model + ":generateContent";
+            String url = baseUrl + "/messages";
 
             HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json")
-                .header("x-goog-api-key", apiKey)
+                .header("x-api-key", apiKey)
+                .header("anthropic-version", ANTHROPIC_API_VERSION)
                 .timeout(Duration.ofSeconds(timeoutSeconds))
                 .POST(HttpRequest.BodyPublishers.ofString(bodyJson))
                 .build();
@@ -79,9 +87,9 @@ public class GeminiAdapter implements LlmAdapter {
 
             if (httpResponse.statusCode() != 200) {
                 String details = describeErrorBody(httpResponse.body());
-                log.error("Gemini API error: status={} details={}", httpResponse.statusCode(), details);
+                log.error("Anthropic API error: status={} details={}", httpResponse.statusCode(), details);
                 throw new LlmCallException(
-                    "Gemini API returned status " + httpResponse.statusCode() + ": " + details
+                    "Anthropic API returned status " + httpResponse.statusCode() + ": " + details
                 );
             }
 
@@ -94,39 +102,40 @@ public class GeminiAdapter implements LlmAdapter {
         } catch (LlmCallException e) {
             throw e;
         } catch (Exception e) {
-            throw new LlmCallException("Failed to call Gemini API: " + e.getMessage(), e);
+            throw new LlmCallException("Failed to call Anthropic API: " + e.getMessage(), e);
         }
     }
 
-    private String parseAnswer(JsonNode root) {
+    // Package-private so unit tests can exercise parsing without hitting the network.
+    String parseAnswer(JsonNode root) {
         if (root == null) {
-            throw new LlmCallException("Gemini response is null");
+            throw new LlmCallException("Anthropic response is null");
         }
 
-        JsonNode candidates = root.path("candidates");
-        if (!candidates.isArray() || candidates.isEmpty()) {
+        JsonNode content = root.path("content");
+        if (!content.isArray() || content.isEmpty()) {
             throw new LlmCallException(
-                "Gemini response missing candidates: " + describeErrorNode(root)
+                "Anthropic response missing content: " + describeErrorNode(root)
             );
         }
 
-        JsonNode parts = candidates.get(0).path("content").path("parts");
-        if (!parts.isArray() || parts.isEmpty()) {
-            throw new LlmCallException("Gemini response missing content.parts");
-        }
-
-        String text = parts.get(0).path("text").asText(null);
+        // Anthropic returns a list of content blocks. For a plain text response
+        // we expect the first block to be of type "text". Tool-use blocks are
+        // not in scope for SentinelCore's evaluation pipeline.
+        JsonNode firstBlock = content.get(0);
+        String text = firstBlock.path("text").asText(null);
         if (text == null || text.isBlank()) {
-            throw new LlmCallException("Gemini response has empty text in parts[0]");
+            throw new LlmCallException("Anthropic response has empty text in content[0]");
         }
 
         return text;
     }
 
     /**
-     * Best-effort extraction of the Gemini error envelope from a raw response
+     * Best-effort extraction of the Anthropic error envelope from a raw response
      * body. Falls back to a safely truncated body snippet if the payload is not
-     * JSON or has no recognisable error shape.
+     * JSON or has no recognisable error shape — the goal is always to leave
+     * *something* actionable in the exception/log rather than just a status code.
      */
     private String describeErrorBody(String rawBody) {
         if (rawBody == null || rawBody.isBlank()) {
@@ -142,9 +151,9 @@ public class GeminiAdapter implements LlmAdapter {
     private String describeErrorNode(JsonNode root) {
         JsonNode error = root.path("error");
         if (error.isObject() && !error.isEmpty()) {
-            String status = error.path("status").asText(error.path("code").asText("unknown"));
+            String type = error.path("type").asText("unknown");
             String message = error.path("message").asText("(no message)");
-            return "error.status=" + status + ", error.message=" + truncate(message, 500);
+            return "error.type=" + type + ", error.message=" + truncate(message, 500);
         }
         List<String> keys = new ArrayList<>();
         root.fieldNames().forEachRemaining(keys::add);
