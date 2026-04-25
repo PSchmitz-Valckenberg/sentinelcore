@@ -125,6 +125,23 @@ curl -s http://localhost:8080/api/runs/RUN_ID/results | jq .
 curl -s http://localhost:8080/api/runs/RUN_ID/report | jq .
 ```
 
+## Benchmark Results
+
+Results of a full 4-strategy evaluation campaign on `gemini-2.0-flash` against the 10-case attack suite.
+Δ columns show change relative to the undefended baseline (negative = improvement).
+
+| Strategy | Attack Success ↓ | Δ | False Positive ↑ | Δ | Refusal Rate | Avg Latency (ms) |
+|---|---|---|---|---|---|---|
+| `NONE` (baseline) | — | — | — | — | — | — |
+| `INPUT_FILTER` | — | — | — | — | — | — |
+| `INPUT_OUTPUT` | — | — | — | — | — | — |
+| `PROMPT_HARDENING` | — | — | — | — | — | — |
+
+> Results will be filled in after the first live benchmark run. To reproduce:
+> ```bash
+> ./scripts/run_benchmark.sh
+> ```
+
 ## Metrics Explained
 
 | Metric | Definition |
