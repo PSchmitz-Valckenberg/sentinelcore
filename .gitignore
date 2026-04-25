@@ -27,3 +27,6 @@ target/
 # Local secrets — never commit
 src/main/resources/application-local.yml
 .env
+
+# Benchmark result files — raw JSON stays local, numbers go into README
+results/*/
