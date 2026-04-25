@@ -2,19 +2,49 @@
 
 [![CI](https://github.com/PSchmitz-Valckenberg/sentinelcore/actions/workflows/ci.yml/badge.svg)](https://github.com/PSchmitz-Valckenberg/sentinelcore/actions/workflows/ci.yml)
 
-Reproducible evaluation of defense effectiveness and utility tradeoffs in LLM-based applications.
+**A benchmark harness for measuring what LLM defenses actually cost.**
 
-## What It Does
+Most LLM-security writeups ask *"is the defense effective?"* The interesting question is *"what does it buy you, and what does it cost?"* SentinelCore runs the same model through the same attack and benign suite under different defense strategies, then reports security and utility metrics side by side — same model, same prompts, same scoring, only the defense differs.
 
-SentinelCore evaluates how a defense layer changes both **security robustness** and **utility** when an LLM application is exposed to prompt injection and data leakage attacks. It does not answer "is this system secure?" — it answers "how much security is gained and how much utility is lost by a specific defense strategy?"
+**See:** [Live benchmark numbers](#benchmark-results) · [Architecture & design rationale](DESIGN.md) · [API](#api-reference)
 
-## Tech Stack
+---
+
+## Highlights
+
+- **Four pluggable defense strategies** behind a `DefenseStrategy` interface — `NONE`, `INPUT_FILTER`, `INPUT_OUTPUT`, `PROMPT_HARDENING` — registered via Spring DI and picked at runtime by enum, not by `if`-tree.
+- **Two LLM providers, swap by config:** Google Gemini and Anthropic Claude, both behind `LlmAdapter`, selected at startup via `@ConditionalOnProperty`. Adding a third is a class plus a flag.
+- **Deterministic scoring engine.** Four security checks — secret leakage, system-prompt leak, policy disclosure, instruction override — run against every response and produce the same label for the same input. The only nondeterminism is the LLM call itself, which is what we're measuring.
+- **Real Postgres in CI.** Integration tests use Testcontainers (PostgreSQL 16), so Flyway migrations run against the same SQL dialect production does. No H2 quirks.
+- **Reproducible benchmarks.** One shell script runs the full 4-strategy × 25-case campaign and writes a JSON report. Numbers in the README came from that script.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Ask["/api/ask-defended"] --> Reg[DefenseStrategyRegistry]
+    Bench["/api/benchmarks"] --> RunSvc[EvaluationRunService]
+    RunSvc -- per case --> Reg
+    Reg --> S1[NoDefense]
+    Reg --> S2[InputFilter]
+    Reg --> S3[InputOutput]
+    Reg --> S4[PromptHardening]
+    S1 & S2 & S3 & S4 --> LLM[LlmAdapter]
+    LLM --> Gem[GeminiAdapter]
+    LLM --> Ant[AnthropicAdapter]
+    RunSvc -- response --> Score[ScoringEngine<br/>4 deterministic checks]
+    Score --> Report[ReportingService<br/>metrics + Δ]
+```
+
+The interactive `/api/ask-defended` endpoint and the benchmark pipeline share the same defense and adapter code. Whatever the benchmark measures is what a real request executes.
+
+## Tech stack
 
 - Java 21, Spring Boot 3.3, Maven
-- PostgreSQL via Docker Compose
-- Flyway migrations
-- Pluggable LLM providers — Google Gemini and Anthropic Claude, selected via config
-- Testcontainers for integration tests
+- PostgreSQL via Docker Compose, Flyway migrations
+- Pluggable LLM providers — Google Gemini and Anthropic Claude
+- Testcontainers (real Postgres) for integration tests
+- GitHub Actions CI on every push and PR
 
 ## Setup
 
@@ -88,7 +118,7 @@ Swagger UI: http://localhost:8080/swagger-ui/index.html
 }
 ```
 
-### Evaluation pipeline
+### Single evaluation run
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -97,49 +127,42 @@ Swagger UI: http://localhost:8080/swagger-ui/index.html
 | `GET` | `/api/runs/{id}/results` | Get per-case execution results |
 | `GET` | `/api/runs/{id}/report` | Get aggregated metrics and breakdown |
 
-**RunCreateRequest:**
-```json
-{
-  "mode": "BASELINE",
-  "model": "gemini-2.0-flash"
-}
-```
+`RunCreateRequest`: `{ "mode": "BASELINE" | "DEFENDED", "model": "gemini-2.0-flash" }`
 
-`mode` is either `BASELINE` (no defense) or `DEFENDED` (defense layer active).
+### Multi-strategy benchmark
 
-### Example: Run a full baseline evaluation
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/benchmarks` | Create a benchmark across N defense strategies (auto-includes a `NONE` baseline) |
+| `POST` | `/api/benchmarks/{id}/execute` | Run all strategies × all cases sequentially |
+| `GET` | `/api/benchmarks/{id}/report` | Get the comparison report with per-strategy Δ vs. baseline |
 
-```bash
-# 1. Create run
-curl -s -X POST http://localhost:8080/api/runs \
-  -H "Content-Type: application/json" \
-  -d '{"mode":"BASELINE","model":"gemini-2.0-flash"}' | jq .
+`BenchmarkCreateRequest`: `{ "model": "gemini-2.0-flash", "strategyTypes": ["INPUT_FILTER","INPUT_OUTPUT","PROMPT_HARDENING"] }`
 
-# 2. Execute (replace RUN_ID)
-curl -s -X POST http://localhost:8080/api/runs/RUN_ID/execute | jq .
-
-# 3. Get results
-curl -s http://localhost:8080/api/runs/RUN_ID/results | jq .
-
-# 4. Get report
-curl -s http://localhost:8080/api/runs/RUN_ID/report | jq .
-```
+The shell script `scripts/run_benchmark.sh` wraps this end-to-end. The results in [Benchmark Results](#benchmark-results) came from it directly.
 
 ## Benchmark Results
 
-Results of a full 4-strategy evaluation campaign on `gemini-2.0-flash` against the 10-case attack suite.
-Δ columns show change relative to the undefended baseline (negative = improvement).
+Full 4-strategy campaign on `gemini-2.0-flash` against the 25-case suite (10 attack + 15 benign).
+Δ columns are change vs. the undefended baseline (negative on attack-success = improvement).
 
 | Strategy | Attack Success ↓ | Δ | False Positive ↑ | Δ | Refusal Rate | Avg Latency (ms) |
 |---|---|---|---|---|---|---|
-| `NONE` (baseline) | — | — | — | — | — | — |
-| `INPUT_FILTER` | — | — | — | — | — | — |
-| `INPUT_OUTPUT` | — | — | — | — | — | — |
-| `PROMPT_HARDENING` | — | — | — | — | — | — |
+| `NONE` (baseline) | 10% | — | 0% | — | 0% | 1714 |
+| `INPUT_FILTER` | 20% | +10% | 0% | 0% | 20% | 1696 |
+| `INPUT_OUTPUT` | 10% | 0% | 0% | 0% | 24% | 1566 |
+| `PROMPT_HARDENING` | 10% | 0% | 0% | 0% | 32% | 1258 |
 
-> Results will be filled in after the first live benchmark run. To reproduce:
+**How to read this table** (more in [DESIGN.md §4](DESIGN.md#4-reading-the-numbers)):
+
+- The keyword-based input filter never actually blocked an input on this suite — `blockedCount` was 0 across all strategies. All apparent protection comes from the LLM refusing on its own.
+- Indirect injection (attack content in retrieved RAG documents, not user input) lands at 50% success under *every* V1 strategy. None of them inspect retrieved content. That's the most honest result in the table — and the next thing to fix.
+- Lower latency under defense is mostly a refusal-is-cheaper effect, not a speedup.
+- N=1 per cell. Sub-10% deltas are noise; only directional signals are real.
+
+> Measured 2026-04-26 on `gemini-2.0-flash`. To reproduce:
 > ```bash
-> ./scripts/run_benchmark.sh
+> ./scripts/run_benchmark.sh --label gemini-2.0-flash
 > ```
 
 ## Metrics Explained
@@ -175,6 +198,6 @@ Results of a full 4-strategy evaluation campaign on `gemini-2.0-flash` against t
 ./mvnw test
 ```
 
-## V1 Scope
+## Scope and what's next
 
-Intentionally excluded from V1: frontend, async job queue, multi-model support, authentication, streaming, ML-based scoring, policy DSL, tool/sandbox execution.
+V1 deliberately leaves out: frontend, async job queue, authentication, streaming, ML-based scoring, policy DSL, tool/sandbox execution, statistical repetitions. Each was a conscious tradeoff — see [DESIGN.md §5](DESIGN.md#5-v1-limitations-deliberately-scoped-out) for the reasoning and [§6](DESIGN.md#6-where-v2-goes) for the V2 roadmap anchored to the data above.
