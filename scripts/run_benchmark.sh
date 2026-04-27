@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run_benchmark.sh — runs a full 4-strategy benchmark campaign against a
+# run_benchmark.sh — runs a full 5-strategy benchmark campaign against a
 # locally running SentinelCore instance and saves the report to results/.
 #
 # Prerequisites:
@@ -9,7 +9,12 @@
 #
 # Usage:
 #   ./scripts/run_benchmark.sh
-#   ./scripts/run_benchmark.sh --label gemini-2.0-flash
+#   ./scripts/run_benchmark.sh --label gemini-2.5-flash
+#   ./scripts/run_benchmark.sh --label gemini-2.5-flash --repetitions 5
+#
+# --repetitions N  How many times each strategy is run (default: 3).
+#                  Mean and stddev are reported per strategy. N=1 gives no
+#                  stddev (marked as null in the JSON report).
 #
 # Note: the active LLM provider is configured in application-local.yml
 # (sentinelcore.llm.provider / sentinelcore.llm.model). --label is a free-form
@@ -20,7 +25,8 @@
 set -euo pipefail
 
 BASE_URL="http://localhost:8080"
-LABEL="gemini-2.0-flash"
+LABEL="gemini-2.5-flash"
+REPETITIONS=3
 RESULTS_DIR="$(dirname "$0")/../results"
 
 while [[ $# -gt 0 ]]; do
@@ -28,6 +34,9 @@ while [[ $# -gt 0 ]]; do
     --label)
       [[ $# -ge 2 ]] || { echo "Error: --label requires an argument"; exit 1; }
       LABEL="$2"; shift 2 ;;
+    --repetitions)
+      [[ $# -ge 2 ]] || { echo "Error: --repetitions requires an argument"; exit 1; }
+      REPETITIONS="$2"; shift 2 ;;
     *) echo "Unknown argument: $1"; exit 1 ;;
   esac
 done
@@ -42,15 +51,17 @@ OUT_DIR="$RESULTS_DIR/${TIMESTAMP}_${LABEL}"
 mkdir -p "$OUT_DIR"
 
 echo "=== SentinelCore Benchmark Campaign ==="
-echo "Label:      $LABEL"
-echo "Output dir: $OUT_DIR"
+echo "Label:       $LABEL"
+echo "Repetitions: $REPETITIONS"
+echo "Output dir:  $OUT_DIR"
 echo ""
 
 # ── 1. Create benchmark ──────────────────────────────────────────────────────
 echo "[1/3] Creating benchmark..."
 CREATE_RESPONSE=$(curl -sfS -X POST "$BASE_URL/api/benchmarks" \
   -H "Content-Type: application/json" \
-  -d "$(jq -n --arg model "$LABEL" '{model: $model, strategyTypes: ["INPUT_FILTER","INPUT_OUTPUT","PROMPT_HARDENING","RAG_CONTENT_FILTER"]}')")
+  -d "$(jq -n --arg model "$LABEL" --argjson reps "$REPETITIONS" \
+       '{model: $model, strategyTypes: ["INPUT_FILTER","INPUT_OUTPUT","PROMPT_HARDENING","RAG_CONTENT_FILTER"], repetitions: $reps}')")
 
 BENCHMARK_ID=$(echo "$CREATE_RESPONSE" | jq -r '.benchmarkId')
 echo "      Benchmark ID: $BENCHMARK_ID"
@@ -76,16 +87,30 @@ REPORT=$(curl -sfS "$BASE_URL/api/benchmarks/$BENCHMARK_ID/report")
 echo "$REPORT" | jq . > "$OUT_DIR/03_report.json"
 
 # ── Summary table ─────────────────────────────────────────────────────────────
+REPS=$(echo "$REPORT" | jq '.repetitions')
 echo ""
-echo "=== Results ==="
+echo "=== Results (N=$REPS repetitions per strategy) ==="
+echo "Mean per strategy:"
 echo "$REPORT" | jq -r '
-  ["Strategy", "AttackSuccess", "FalsePositive", "Refusal", "AvgLatencyMs"],
+  ["Strategy", "ASR", "FPR", "Refusal", "Latency(ms)"],
   (.runs[] | [
     .strategyType,
-    (.metrics.metrics.attackSuccessRate | tostring),
-    (.metrics.metrics.falsePositiveRate | tostring),
-    (.metrics.metrics.refusalRate | tostring),
-    (.metrics.metrics.avgLatencyMs | tostring)
+    (.aggregated.attackSuccessRateMean | tostring),
+    (.aggregated.falsePositiveRateMean | tostring),
+    (.aggregated.refusalRateMean | tostring),
+    (.aggregated.avgLatencyMsMean | tostring)
+  ]) | @tsv' | column -t
+
+echo ""
+echo "Stddev per strategy (null = N=1, not computable):"
+echo "$REPORT" | jq -r '
+  ["Strategy", "ASR-stddev", "FPR-stddev", "Refusal-stddev", "Latency-stddev(ms)"],
+  (.runs[] | [
+    .strategyType,
+    (.aggregated.attackSuccessRateStddev // "null" | tostring),
+    (.aggregated.falsePositiveRateStddev // "null" | tostring),
+    (.aggregated.refusalRateStddev // "null" | tostring),
+    (.aggregated.avgLatencyMsStddev // "null" | tostring)
   ]) | @tsv' | column -t
 
 echo ""

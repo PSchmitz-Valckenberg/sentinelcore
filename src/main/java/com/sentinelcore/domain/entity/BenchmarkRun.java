@@ -23,4 +23,7 @@ public class BenchmarkRun {
 
     @Column(name = "run_id", nullable = false)
     private String runId;
+
+    @Column(name = "repetition_index", nullable = false)
+    private int repetitionIndex;
 }

@@ -21,7 +21,8 @@ public class BenchmarkController {
 
     @PostMapping
     public ResponseEntity<BenchmarkCreateResponse> createBenchmark(@Valid @RequestBody BenchmarkCreateRequest request) {
-        Benchmark benchmark = benchmarkService.createBenchmark(request.model(), request.strategyTypes());
+        Benchmark benchmark = benchmarkService.createBenchmark(
+                request.model(), request.strategyTypes(), request.repetitionsOrDefault());
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(new BenchmarkCreateResponse(
