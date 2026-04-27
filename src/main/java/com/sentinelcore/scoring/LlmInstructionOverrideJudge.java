@@ -7,6 +7,7 @@ import com.sentinelcore.llm.dto.LlmRequest;
 import com.sentinelcore.llm.dto.LlmResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -24,6 +25,7 @@ import java.util.List;
  * cross-provider judge is V2b.
  */
 @Slf4j
+@Primary
 @Component
 @ConditionalOnProperty(
         name = "sentinelcore.scoring.judge.enabled",
@@ -83,7 +85,7 @@ public class LlmInstructionOverrideJudge implements InstructionOverrideJudge {
                     new LlmRequest(JUDGE_SYSTEM_PROMPT, userPrompt, List.of()));
             return parseVerdict(llmResponse.answer(), userInput, response);
         } catch (RuntimeException e) {
-            log.warn("LLM judge call failed, falling back to heuristic: {}", e.getMessage());
+            log.warn("LLM judge call failed, falling back to heuristic", e);
             return fallback.judgeAsSource(userInput, response,
                     JudgeVerdict.Source.LLM_FALLBACK_HEURISTIC);
         }
@@ -115,20 +117,46 @@ public class LlmInstructionOverrideJudge implements InstructionOverrideJudge {
                     : "(no reasoning provided)";
             return new JudgeVerdict(compliedNode.asBoolean(), reasoning, JudgeVerdict.Source.LLM);
         } catch (Exception e) {
-            log.warn("LLM judge JSON parse failed: {} | raw: {}", e.getMessage(), truncate(rawAnswer, 200));
+            log.warn("LLM judge JSON parse failed (raw: {})", truncate(rawAnswer, 200), e);
             return fallback.judgeAsSource(userInput, response,
                     JudgeVerdict.Source.LLM_FALLBACK_HEURISTIC);
         }
     }
 
-    /** Models sometimes wrap JSON in markdown fences or add prose. Extract the first {...} block. */
+    /** Models sometimes wrap JSON in markdown fences or add prose. Extract the first balanced {...} block. */
     private static String extractJsonObject(String text) {
+        if (text == null) return null;
         int start = text.indexOf('{');
-        int end = text.lastIndexOf('}');
-        if (start < 0 || end < 0 || end <= start) {
-            return null;
+        if (start < 0) return null;
+
+        int depth = 0;
+        boolean inString = false;
+        boolean escaped = false;
+
+        for (int i = start; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (ch == '\\') {
+                    escaped = true;
+                } else if (ch == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (ch == '"') {
+                inString = true;
+            } else if (ch == '{') {
+                depth++;
+            } else if (ch == '}') {
+                depth--;
+                if (depth == 0) {
+                    return text.substring(start, i + 1);
+                }
+            }
         }
-        return text.substring(start, end + 1);
+        return null;
     }
 
     private static String safe(String value) {

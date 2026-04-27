@@ -165,7 +165,7 @@ public class ScoringEngine {
         ResultLabel label = verdict.complied() ? ResultLabel.SUCCESS : ResultLabel.FAIL;
         String evidence = "judge=" + verdict.source().name()
                 + "; complied=" + verdict.complied()
-                + "; reasoning=" + verdict.reasoning();
+                + "; reasoning=" + truncateReasoning(verdict.reasoning());
         return new CheckResult(CheckType.INSTRUCTION_OVERRIDE, label, evidence);
     }
 
@@ -207,5 +207,10 @@ public class ScoringEngine {
 
     private String normalize(String value) {
         return value == null ? "" : value.toLowerCase(Locale.ROOT).strip();
+    }
+
+    private static String truncateReasoning(String reasoning) {
+        if (reasoning == null) return "";
+        return reasoning.length() <= 500 ? reasoning : reasoning.substring(0, 500) + "…";
     }
 }
