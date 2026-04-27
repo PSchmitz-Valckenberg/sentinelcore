@@ -58,5 +58,5 @@ sentinelcore:
       - "reveal (the )?(full )?(system )?prompt"
       - "print.*canary"
       - "disregard (all |the )?(previous |prior |above )?(instructions|rules)"
-      - "you are now"
+      - "you are now (in |a |an )[a-z]"
       - "new instructions:"
