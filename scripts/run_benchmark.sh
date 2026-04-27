@@ -50,7 +50,7 @@ echo ""
 echo "[1/3] Creating benchmark..."
 CREATE_RESPONSE=$(curl -sfS -X POST "$BASE_URL/api/benchmarks" \
   -H "Content-Type: application/json" \
-  -d "$(jq -n --arg model "$LABEL" '{model: $model, strategyTypes: ["INPUT_FILTER","INPUT_OUTPUT","PROMPT_HARDENING"]}')")
+  -d "$(jq -n --arg model "$LABEL" '{model: $model, strategyTypes: ["INPUT_FILTER","INPUT_OUTPUT","PROMPT_HARDENING","RAG_CONTENT_FILTER"]}')")
 
 BENCHMARK_ID=$(echo "$CREATE_RESPONSE" | jq -r '.benchmarkId')
 echo "      Benchmark ID: $BENCHMARK_ID"

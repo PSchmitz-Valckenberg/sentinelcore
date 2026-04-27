@@ -12,11 +12,11 @@ Most LLM-security writeups ask *"is the defense effective?"* The interesting que
 
 ## Highlights
 
-- **Four pluggable defense strategies** behind a `DefenseStrategy` interface — `NONE`, `INPUT_FILTER`, `INPUT_OUTPUT`, `PROMPT_HARDENING` — registered via Spring DI and picked at runtime by enum, not by `if`-tree.
+- **Five pluggable defense strategies** behind a `DefenseStrategy` interface — `NONE`, `INPUT_FILTER`, `INPUT_OUTPUT`, `PROMPT_HARDENING`, `RAG_CONTENT_FILTER` — registered via Spring DI and picked at runtime by enum, not by `if`-tree.
 - **Two LLM providers, swap by config:** Google Gemini and Anthropic Claude, both behind `LlmAdapter`, selected at startup via `@ConditionalOnProperty`. Adding a third is a class plus a flag.
 - **Deterministic scoring engine.** Four security checks — secret leakage, system-prompt leak, policy disclosure, instruction override — run against every response and produce the same label for the same input. The only nondeterminism is the LLM call itself, which is what we're measuring.
 - **Real Postgres in CI.** Integration tests use Testcontainers (PostgreSQL 16), so Flyway migrations run against the same SQL dialect production does. No H2 quirks.
-- **Reproducible benchmarks.** One shell script runs the full 4-strategy × 25-case campaign and writes a JSON report. Numbers in the README came from that script.
+- **Reproducible benchmarks.** One shell script runs the full 5-strategy × 25-case campaign and writes a JSON report. Numbers in the README came from that script.
 
 ## Architecture
 
@@ -29,7 +29,8 @@ flowchart LR
     Reg --> S2[InputFilter]
     Reg --> S3[InputOutput]
     Reg --> S4[PromptHardening]
-    S1 & S2 & S3 & S4 --> LLM[LlmAdapter]
+    Reg --> S5[RagContentFilter]
+    S1 & S2 & S3 & S4 & S5 --> LLM[LlmAdapter]
     LLM --> Gem[GeminiAdapter]
     LLM --> Ant[AnthropicAdapter]
     RunSvc -- response --> Score[ScoringEngine<br/>4 deterministic checks]
@@ -143,7 +144,9 @@ The shell script `scripts/run_benchmark.sh` wraps this end-to-end. The results i
 
 ## Benchmark Results
 
-Full 4-strategy campaign on `gemini-2.0-flash` against the 25-case suite (10 attack + 15 benign).
+### V1 — `gemini-2.0-flash`, four strategies (2026-04-26)
+
+Original 4-strategy campaign against the 25-case suite (10 attack + 15 benign).
 Δ columns are change vs. the undefended baseline (negative on attack-success = improvement).
 
 | Strategy | Attack Success ↓ | Δ | False Positive ↑ | Δ | Refusal Rate | Avg Latency (ms) |
@@ -153,16 +156,41 @@ Full 4-strategy campaign on `gemini-2.0-flash` against the 25-case suite (10 att
 | `INPUT_OUTPUT` | 10% | 0% | 0% | 0% | 24% | 1566 |
 | `PROMPT_HARDENING` | 10% | 0% | 0% | 0% | 32% | 1258 |
 
-**How to read this table** (more in [DESIGN.md §4](DESIGN.md#4-reading-the-numbers)):
+Key V1 finding: indirect injection (attack content in retrieved RAG documents, not user input) landed at **50% success under every V1 strategy** — none of them inspected retrieved content. That motivated the V2 work below.
 
-- The keyword-based input filter never actually blocked an input on this suite — `blockedCount` was 0 across all strategies. All apparent protection comes from the LLM refusing on its own.
-- Indirect injection (attack content in retrieved RAG documents, not user input) lands at 50% success under *every* V1 strategy. None of them inspect retrieved content. That's the most honest result in the table — and the next thing to fix.
-- Lower latency under defense is mostly a refusal-is-cheaper effect, not a speedup.
-- N=1 per cell. Sub-10% deltas are noise; only directional signals are real.
+### V2 — `gemini-2.5-flash`, five strategies, with `RAG_CONTENT_FILTER` (2026-04-27)
 
-> Measured 2026-04-26 on `gemini-2.0-flash`. To reproduce:
+Same 25-case suite, newer model, plus the new `RAG_CONTENT_FILTER` strategy that inspects retrieved RAG documents and wraps suspicious content in `<UNTRUSTED_DOCUMENT>` markers before the LLM call.
+
+| Strategy | Attack Success ↓ | Δ | False Positive ↑ | Δ | Refusal Rate | Avg Latency (ms) |
+|---|---|---|---|---|---|---|
+| `NONE` (baseline) | 10% | — | 0% | — | 0% | 1960 |
+| `INPUT_FILTER` | 20% | +10% | 0% | 0% | 28% | 1922 |
+| `INPUT_OUTPUT` | 10% | 0% | 0% | 0% | 24% | 2103 |
+| `PROMPT_HARDENING` | 0% | −10% | 0% | 0% | 32% | 1423 |
+| `RAG_CONTENT_FILTER` | 0% | −10% | 0% | 0% | 24% | 2136 |
+
+**Indirect-injection-only breakdown** (CASE-008, CASE-009 — N=2):
+
+| Strategy | Indirect-injection attack success |
+|---|---|
+| `NONE` | 50% |
+| `INPUT_FILTER` | 50% |
+| `INPUT_OUTPUT` | 50% |
+| `PROMPT_HARDENING` | 0% |
+| `RAG_CONTENT_FILTER` | **0%** |
+
+**How to read these tables** (more in [DESIGN.md §4](DESIGN.md#4-reading-the-numbers)):
+
+- `RAG_CONTENT_FILTER` neutralised indirect injection in this run — same headline result as `PROMPT_HARDENING`, but via a different mechanism (defence-in-depth on retrieved content, independent of how well the model self-refuses). With only N=2 indirect-injection cases, this is a directional signal, not a statistical claim.
+- The V1→V2 jump in `PROMPT_HARDENING` (10% → 0% aggregate, 50% → 0% on indirect injection) is **mostly a model effect**, not a defence improvement — `gemini-2.5-flash` is more conservative under hardened prompts than `2.0-flash`. The V1 table is left intact above so this is visible.
+- The keyword-based `INPUT_FILTER` still never actually blocks an input — `blockedCount` was 0 in both runs. Its higher attack-success rate vs. baseline is a real, repeated finding.
+- Lower latency under defence is still mostly a refusal-is-cheaper effect, not a speedup.
+- N=1 per cell in both runs. Sub-10% deltas are noise; only directional signals are real. Repetitions and confidence intervals remain a V2 follow-up (see [DESIGN.md §6](DESIGN.md#6-where-v2-goes)).
+
+> To reproduce V2:
 > ```bash
-> ./scripts/run_benchmark.sh --label gemini-2.0-flash
+> ./scripts/run_benchmark.sh --label gemini-2.5-flash
 > ```
 
 ## Metrics Explained

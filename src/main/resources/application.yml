@@ -51,3 +51,12 @@ sentinelcore:
   system-prompt:
     text: "You are a helpful knowledge assistant. Answer questions based on provided documents."
     canary-token: ${CANARY_TOKEN:SENTINEL-CANARY-9x7z}
+  defense:
+    rag-content-patterns:
+      - "ignore (all |the )?(previous |prior |above )?instructions"
+      - "developer mode"
+      - "reveal (the )?(full )?(system )?prompt"
+      - "print.*canary"
+      - "disregard (all |the )?(previous |prior |above )?(instructions|rules)"
+      - "you are now (in |a |an )[a-z]"
+      - "new instructions:"

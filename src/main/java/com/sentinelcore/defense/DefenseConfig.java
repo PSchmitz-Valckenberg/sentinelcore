@@ -7,10 +7,12 @@ import java.util.List;
 @ConfigurationProperties(prefix = "sentinelcore.defense")
 public record DefenseConfig(
     List<String> inputKeywords,
-    List<String> outputPhrases
+    List<String> outputPhrases,
+    List<String> ragContentPatterns
 ) {
     public DefenseConfig {
         inputKeywords = inputKeywords == null ? List.of() : inputKeywords;
         outputPhrases = outputPhrases == null ? List.of() : outputPhrases;
+        ragContentPatterns = ragContentPatterns == null ? List.of() : ragContentPatterns;
     }
 }
