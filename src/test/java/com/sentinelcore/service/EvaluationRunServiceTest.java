@@ -13,6 +13,7 @@ import com.sentinelcore.repository.AttackExecutionRepository;
 import com.sentinelcore.repository.EvaluationCaseRepository;
 import com.sentinelcore.repository.EvaluationRunRepository;
 import com.sentinelcore.repository.ScoreDetailRepository;
+import com.sentinelcore.scoring.HeuristicInstructionOverrideJudge;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,7 +57,7 @@ class EvaluationRunServiceTest {
     @BeforeEach
     void setUp() {
         SystemPromptConfig config = new SystemPromptConfig(SYSTEM_PROMPT, CANARY);
-        scoringEngine = new ScoringEngine(config);
+        scoringEngine = new ScoringEngine(config, new HeuristicInstructionOverrideJudge());
         lenient().when(systemPromptBuilder.build()).thenReturn(BUILT_PROMPT);
         service = new EvaluationRunService(
                 runRepository, executionRepository, scoreDetailRepository,
