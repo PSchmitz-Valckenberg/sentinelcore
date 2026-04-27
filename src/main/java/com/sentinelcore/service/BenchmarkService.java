@@ -105,20 +105,23 @@ public class BenchmarkService {
         Benchmark benchmark = benchmarkRepository.findById(benchmarkId)
                 .orElseThrow(() -> new EntityNotFoundException("Benchmark not found: " + benchmarkId));
 
-        // Group runs by strategy, preserving insertion order
+        // Group runs by strategy in repetition_index order (guaranteed by @OrderBy on Benchmark.runs)
         Map<StrategyType, List<RunMetricsResponse>> metricsByStrategy = new LinkedHashMap<>();
         Map<StrategyType, List<String>> runIdsByStrategy = new LinkedHashMap<>();
+        // Track the rep-0 run per strategy explicitly so representative is stable
+        Map<StrategyType, RunMetricsResponse> rep0ByStrategy = new LinkedHashMap<>();
         for (BenchmarkRun br : benchmark.getRuns()) {
-            metricsByStrategy.computeIfAbsent(br.getStrategyType(), k -> new ArrayList<>())
-                    .add(reportingService.getMetrics(br.getRunId()));
+            RunMetricsResponse m = reportingService.getMetrics(br.getRunId());
+            metricsByStrategy.computeIfAbsent(br.getStrategyType(), k -> new ArrayList<>()).add(m);
             runIdsByStrategy.computeIfAbsent(br.getStrategyType(), k -> new ArrayList<>())
                     .add(br.getRunId());
+            if (br.getRepetitionIndex() == 0) {
+                rep0ByStrategy.put(br.getStrategyType(), m);
+            }
         }
 
-        // Use the first NONE run as baseline for delta computation
-        List<RunMetricsResponse> baselineRuns = metricsByStrategy.get(StrategyType.NONE);
-        RunMetricsResponse baselineSample = (baselineRuns != null && !baselineRuns.isEmpty())
-                ? baselineRuns.get(0) : null;
+        // Use rep-0 of NONE as baseline for delta computation
+        RunMetricsResponse baselineSample = rep0ByStrategy.get(StrategyType.NONE);
 
         List<RunComparisonEntry> entries = new ArrayList<>();
         for (Map.Entry<StrategyType, List<RunMetricsResponse>> e : metricsByStrategy.entrySet()) {
@@ -126,8 +129,8 @@ public class BenchmarkService {
             List<RunMetricsResponse> runs = e.getValue();
             List<String> runIds = runIdsByStrategy.get(strategy);
 
-            // Representative single-run metrics for backwards-compatible fields
-            RunMetricsResponse representative = runs.get(0);
+            // rep-0 as the representative for backwards-compatible single-metrics field
+            RunMetricsResponse representative = rep0ByStrategy.getOrDefault(strategy, runs.get(0));
             AggregatedStrategyMetrics aggregated = aggregate(runs);
             DeltaMetrics delta = (baselineSample != null && strategy != StrategyType.NONE)
                     ? computeDelta(baselineSample, representative) : null;
@@ -171,19 +174,23 @@ public class BenchmarkService {
     }
 
     static double mean(double[] values) {
-        if (values.length == 0) return 0.0;
-        double sum = 0;
-        for (double v : values) sum += v;
-        return round3(sum / values.length);
+        return round3(rawMean(values));
     }
 
     // Returns null for N=1 (not computable), otherwise population stddev
     static Double stddev(double[] values) {
         if (values.length <= 1) return null;
-        double m = mean(values);
+        double m = rawMean(values);
         double sumSq = 0;
         for (double v : values) sumSq += (v - m) * (v - m);
         return round3(Math.sqrt(sumSq / values.length));
+    }
+
+    private static double rawMean(double[] values) {
+        if (values.length == 0) return 0.0;
+        double sum = 0;
+        for (double v : values) sum += v;
+        return sum / values.length;
     }
 
     private DeltaMetrics computeDelta(RunMetricsResponse baseline, RunMetricsResponse defended) {

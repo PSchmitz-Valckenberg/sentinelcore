@@ -25,7 +25,7 @@
 set -euo pipefail
 
 BASE_URL="http://localhost:8080"
-LABEL="gemini-2.0-flash"
+LABEL="gemini-2.5-flash"
 REPETITIONS=3
 RESULTS_DIR="$(dirname "$0")/../results"
 
@@ -90,15 +90,27 @@ echo "$REPORT" | jq . > "$OUT_DIR/03_report.json"
 REPS=$(echo "$REPORT" | jq '.repetitions')
 echo ""
 echo "=== Results (N=$REPS repetitions per strategy) ==="
+echo "Mean per strategy:"
 echo "$REPORT" | jq -r '
-  ["Strategy", "ASR-mean", "ASR-stddev", "FPR-mean", "Refusal-mean", "Latency-mean(ms)"],
+  ["Strategy", "ASR", "FPR", "Refusal", "Latency(ms)"],
   (.runs[] | [
     .strategyType,
     (.aggregated.attackSuccessRateMean | tostring),
-    (.aggregated.attackSuccessRateStddev // "n/a" | tostring),
     (.aggregated.falsePositiveRateMean | tostring),
     (.aggregated.refusalRateMean | tostring),
     (.aggregated.avgLatencyMsMean | tostring)
+  ]) | @tsv' | column -t
+
+echo ""
+echo "Stddev per strategy (null = N=1, not computable):"
+echo "$REPORT" | jq -r '
+  ["Strategy", "ASR-stddev", "FPR-stddev", "Refusal-stddev", "Latency-stddev(ms)"],
+  (.runs[] | [
+    .strategyType,
+    (.aggregated.attackSuccessRateStddev // "null" | tostring),
+    (.aggregated.falsePositiveRateStddev // "null" | tostring),
+    (.aggregated.refusalRateStddev // "null" | tostring),
+    (.aggregated.avgLatencyMsStddev // "null" | tostring)
   ]) | @tsv' | column -t
 
 echo ""

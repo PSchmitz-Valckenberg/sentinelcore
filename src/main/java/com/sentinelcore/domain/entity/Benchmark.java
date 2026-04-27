@@ -42,6 +42,7 @@ public class Benchmark {
             name = "benchmark_runs",
             joinColumns = @JoinColumn(name = "benchmark_id")
     )
+    @OrderBy("repetitionIndex ASC")
         private List<BenchmarkRun> runs = new ArrayList<>();
 
         @Column(name = "repetitions", nullable = false)
