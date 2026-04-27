@@ -43,7 +43,7 @@ The goal is comparability, not absolute claims.
 
 **Three cooperating subsystems:**
 
-- **Defense layer** — pluggable strategies that wrap the LLM call (filter input, harden the system prompt, scan output, or just pass through).
+- **Defense layer** — pluggable strategies that wrap the LLM call (filter input, harden the system prompt, scan output, sanitize retrieved RAG content, or just pass through).
 - **LLM adapter** — single interface, two backends (Gemini, Anthropic). Provider chosen by config at startup.
 - **Evaluation pipeline** — drives a fixed test suite through one or more strategies, scores each response with deterministic checks, aggregates per-category and overall metrics.
 
@@ -70,7 +70,7 @@ Spring picks them up via component scanning, the `DefenseStrategyRegistry` keys 
 - *Single `DefenseService` with a switch on enum* — each new defense bloats one file, makes per-strategy unit tests harder, and forces every strategy to share dependency injection.
 - *Plugin loader (SPI / classpath scanning of jars)* — overkill for V1; defense strategies are first-class code, not user-extensible plugins.
 
-**What this gives us:** four ~40-line classes, each unit-testable in isolation against mocks of `LlmAdapter`, `InputAnalyzer`, `OutputAnalyzer`. Adding a fifth strategy means a new file plus a new entry on `StrategyType` — no edits to the dispatcher.
+**What this gives us:** five ~40-line classes (the fifth, `RagContentFilterStrategy`, was added in V2), each unit-testable in isolation against mocks of `LlmAdapter`, `InputAnalyzer`, `OutputAnalyzer`, `RagContentAnalyzer`. Adding the fifth strategy was exactly that: one new file plus one new entry on `StrategyType` — zero edits to the dispatcher, registry, or any existing strategy. The pattern paid off the first time it was tested.
 
 ### 3.2 Pluggable LLM provider via `@ConditionalOnProperty`
 
@@ -150,9 +150,13 @@ The current README table summarizes a 25-case run (10 attack + 15 benign) on `ge
 
 The keyword-based `InputAnalyzer` never blocked a single attack input on this suite. All apparent protection comes from the LLM refusing on its own (`refusedCount > 0`) — Gemini is already trained to resist obvious overrides. This is an unflattering result for `INPUT_FILTER` as a layer and an honest one to surface.
 
-**b) Indirect injection survives every defense.**
+**b) Indirect injection survives every V1 defense — V2 addresses it.**
 
-`INDIRECT_INJECTION` (attack content lives in RAG documents, not user input) lands at 50% attack success under `NONE`, `INPUT_FILTER`, `INPUT_OUTPUT`, *and* `PROMPT_HARDENING`. None of the V1 defenses inspect retrieved content. That's the right next defense to build — and the data says so before any architecture review needs to.
+In the V1 run on `gemini-2.0-flash`, `INDIRECT_INJECTION` (attack content lives in RAG documents, not user input) landed at 50% attack success under `NONE`, `INPUT_FILTER`, `INPUT_OUTPUT`, *and* `PROMPT_HARDENING`. None of the V1 defenses inspect retrieved content. That was the loudest signal in the data, and it became the V2 work item.
+
+V2 added `RAG_CONTENT_FILTER`: a strategy that runs each retrieved document through a regex-based analyzer before the LLM call and wraps suspicious content in `<UNTRUSTED_DOCUMENT>` markers with a preamble instructing the model to treat the contents as data, not instructions. In the 2026-04-27 run on `gemini-2.5-flash`, indirect injection dropped to 0% under both `RAG_CONTENT_FILTER` and `PROMPT_HARDENING` — the latter is mostly a model effect (`2.5-flash` self-refuses more aggressively than `2.0-flash`), but `RAG_CONTENT_FILTER` provides the same protection through an independent mechanism that doesn't rely on model behavior. With N=2 indirect-injection cases, this is a directional confirmation, not a statistical claim — but it's the kind of defense-in-depth that holds up when the underlying model changes.
+
+WRAP was chosen over DROP for one reason: real production RAG documents usually mix legitimate information with attacker payloads. A drop would discard both; a wrap preserves the data and shifts the burden to the model's already-trained ability to ignore in-band instructions when told to.
 
 **c) Refusal latency is much lower than compliance latency.**
 
@@ -172,7 +176,7 @@ The point of an honest portfolio piece is naming the gaps, not hiding them.
 |---|---|---|
 | Statistical rigor | N=1 per cell, no variance, no CIs | One real campaign is enough to show the pipeline works end-to-end; multi-run is V2. |
 | `INSTRUCTION_OVERRIDE` heuristic | Misses silent compliance (no marker phrase) | Improving it requires a labeled training set; out of scope for V1. |
-| Indirect injection | No RAG content inspection | First architectural extension target for V2. |
+| ~~Indirect injection~~ | ~~No RAG content inspection~~ | **Shipped in V2** as `RAG_CONTENT_FILTER` — see §4(b). |
 | Tool / function-call attacks | Not modeled | V1 LLM surface is text-only; tool use is a separate threat surface. |
 | Async / streaming | All endpoints synchronous | Job-queue infra is its own project; not what this one is about. |
 | Multi-tenant / auth | Single-tenant local app | Out of scope for an evaluation harness. |
@@ -186,8 +190,8 @@ Items in this table are not "we forgot." They are "we drew a line."
 
 In rough priority order, anchored to the data above:
 
-1. **RAG-content defense.** §4(b) is the loudest signal in the data. A pre-prompt sanitizer or post-retrieval classifier on document content is the obvious next strategy.
-2. **Repetitions + confidence intervals.** Make the table a leaderboard you can trust. N=5 per cell is enough to see if `INPUT_OUTPUT` vs `PROMPT_HARDENING` differences are real.
+1. ~~**RAG-content defense.**~~ **Shipped** — see §4(b) and the V2 row in the README's benchmark table.
+2. **Repetitions + confidence intervals.** Make the table a leaderboard you can trust. N=5 per cell is enough to see if `INPUT_OUTPUT` vs `PROMPT_HARDENING` differences are real, and would let us say something stronger about `RAG_CONTENT_FILTER` on the indirect-injection cases (currently N=2).
 3. **`INSTRUCTION_OVERRIDE` v2.** Replace the marker list with a more general "did the response do the thing the override asked?" judge. Probably another LLM call gated behind a separate flag — adds a dependency, but keeps it isolated to scoring and not to the system under test.
 4. **Latency under load.** Right now we measure single-call latency. Real production systems also care about throughput-with-defense.
 5. **More providers.** OpenAI, Mistral, local models. The adapter interface is built for it.
