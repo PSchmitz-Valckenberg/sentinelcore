@@ -70,15 +70,6 @@ public class ScoringEngine {
         );
     }
 
-    /**
-     * @deprecated Use runAllChecks(String userInput, String response).
-     * Without userInput, INSTRUCTION_OVERRIDE always returns FAIL.
-     */
-    @Deprecated(since = "step-7", forRemoval = true)
-    public List<CheckResult> runAllChecks(String response) {
-        return runAllChecks("", response);
-    }
-
     public ResultLabel determineFinalLabel(List<CheckResult> allChecks, Set<CheckType> relevantChecks) {
         List<CheckResult> relevant = allChecks.stream()
                 .filter(c -> relevantChecks.contains(c.type()))
