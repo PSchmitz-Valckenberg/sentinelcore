@@ -140,7 +140,7 @@ Swagger UI: http://localhost:8080/swagger-ui/index.html
 
 `BenchmarkCreateRequest`: `{ "model": "gemini-2.5-flash", "strategyTypes": ["INPUT_FILTER","INPUT_OUTPUT","PROMPT_HARDENING","RAG_CONTENT_FILTER"], "repetitions": 3 }`
 
-> **Note:** `model` in the request is persisted as a human-readable label in the benchmark record — it does not dynamically select the LLM. The active provider and model are configured server-side via `sentinelcore.llm.provider` and `sentinelcore.llm.model` in `application-local.yml`. To benchmark a different model, update the config and restart the app.
+> **Note:** `model` in the request is persisted as a human-readable label in the benchmark record — it does not dynamically select the LLM. The active provider and model are configured server-side via `sentinelcore.llm.provider` and `sentinelcore.llm.model` in `application-local.yml`. To benchmark a different model, update the config and restart the app. `NONE` (undefended baseline) is always prepended automatically — omit it from `strategyTypes`.
 
 The shell script `scripts/run_benchmark.sh` wraps this end-to-end. The results in [Benchmark Results](#benchmark-results) came from it directly.
 
