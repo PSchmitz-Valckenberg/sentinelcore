@@ -31,7 +31,6 @@ import java.util.function.Supplier;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@SuppressWarnings("null")
 public class EvaluationRunService {
 
     private final EvaluationRunRepository runRepository;

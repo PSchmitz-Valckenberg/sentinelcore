@@ -175,9 +175,9 @@ WRAP was chosen over DROP for one reason: real production RAG documents usually 
 
 `ROLE_PLAY` takes 6.7s under `NONE` (model reasons through it) but 1.5s under `PROMPT_HARDENING` (model refuses immediately). Any "defense lowered latency" in the table is mostly this effect — an honest read says defenses make refusal cheaper, not the system faster.
 
-**d) N=1.**
+**d) N=1 in V1, configurable repetitions in V2.**
 
-Each cell is one run. Sub-10% deltas are inside the noise floor of LLM nondeterminism. The signals worth reading are directional (INPUT_FILTER never blocks; indirect injection is unsolved) — not 0.243 vs 0.198. V2 will add repetitions and confidence intervals; until then, the table is a snapshot, not a leaderboard.
+The V1 table is N=1 per cell. Sub-10% deltas are inside the noise floor of LLM nondeterminism. V2 added `repetitions` support to `BenchmarkCreateRequest` (default 1, up to 10); the report now aggregates mean and population stddev per metric across all repetitions. `stddev=null` when N=1 — deliberately, since a single run produces no variance estimate. The default script uses N=3. Until a run with enough repetitions is committed to the README, read directional signals (INPUT_FILTER never blocks; RAG_CONTENT_FILTER neutralises indirect injection), not point estimates.
 
 ---
 
@@ -187,7 +187,7 @@ The point of an honest portfolio piece is naming the gaps, not hiding them.
 
 | Area | Limitation | Why deferred |
 |---|---|---|
-| Statistical rigor | N=1 per cell, no variance, no CIs | One real campaign is enough to show the pipeline works end-to-end; multi-run is V2. |
+| ~~Statistical rigor~~ | ~~N=1 per cell, no variance, no CIs~~ | **Shipped in V2** — configurable `repetitions`, mean + population stddev in the benchmark report. |
 | ~~`INSTRUCTION_OVERRIDE` heuristic~~ | ~~Misses silent compliance (no marker phrase)~~ | **Addressed in V2** by `LlmInstructionOverrideJudge` (opt-in flag) — see §3.4. The default heuristic ships unchanged for benchmarks that want determinism. |
 | ~~Indirect injection~~ | ~~No RAG content inspection~~ | **Shipped in V2** as `RAG_CONTENT_FILTER` — see §4(b). |
 | Tool / function-call attacks | Not modeled | V1 LLM surface is text-only; tool use is a separate threat surface. |
@@ -204,7 +204,7 @@ Items in this table are not "we forgot." They are "we drew a line."
 In rough priority order, anchored to the data above:
 
 1. ~~**RAG-content defense.**~~ **Shipped** — see §4(b) and the V2 row in the README's benchmark table.
-2. **Repetitions + confidence intervals.** Make the table a leaderboard you can trust. N=5 per cell is enough to see if `INPUT_OUTPUT` vs `PROMPT_HARDENING` differences are real, and would let us say something stronger about `RAG_CONTENT_FILTER` on the indirect-injection cases (currently N=2).
+2. ~~**Repetitions + confidence intervals.**~~ **Shipped** — `BenchmarkCreateRequest` now accepts `repetitions` (1–10). The report exposes mean and population stddev per metric; `null` stddev when N=1 signals "not estimable" rather than "zero variance". The default script uses N=3.
 3. ~~**`INSTRUCTION_OVERRIDE` v2.**~~ **Shipped** as `LlmInstructionOverrideJudge` (default-off flag, fallback to heuristic on failure, separate verdict source recorded per case). See §3.4. Next iteration: cross-provider judge so the judge model is independent of the system under test (currently same-provider, which leaves a circular-bias caveat documented in §3.4).
 4. **Latency under load.** Right now we measure single-call latency. Real production systems also care about throughput-with-defense.
 5. **More providers.** OpenAI, Mistral, local models. The adapter interface is built for it.
