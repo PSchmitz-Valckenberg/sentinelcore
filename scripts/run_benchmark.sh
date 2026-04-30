@@ -68,9 +68,14 @@ echo "      Benchmark ID: $BENCHMARK_ID"
 echo "$CREATE_RESPONSE" | jq . > "$OUT_DIR/01_create.json"
 
 # ── 2. Execute benchmark (synchronous — may take several minutes) ─────────────
-echo "[2/3] Executing benchmark (runs all cases for each strategy — please wait)..."
+# Timeout scales with repetitions: ~6 seconds per LLM call, 5 strategies, N cases.
+# Minimum 600s, maximum 7200s (2h). Adjust if your provider is slower.
+MAX_TIME=$(( REPETITIONS * 5 * 30 * 6 ))
+if [[ $MAX_TIME -lt 600 ]]; then MAX_TIME=600; fi
+if [[ $MAX_TIME -gt 7200 ]]; then MAX_TIME=7200; fi
+echo "[2/3] Executing benchmark (timeout: ${MAX_TIME}s — please wait)..."
 EXECUTE_RESPONSE=$(curl -sfS -X POST "$BASE_URL/api/benchmarks/$BENCHMARK_ID/execute" \
-  --max-time 600)
+  --max-time $MAX_TIME)
 
 STATUS=$(echo "$EXECUTE_RESPONSE" | jq -r '.status')
 echo "      Status: $STATUS"
