@@ -29,6 +29,14 @@ LABEL="gemini-2.5-flash"
 REPETITIONS=3
 RESULTS_DIR="$(dirname "$0")/../results"
 
+# Number of strategies sent in the request (NONE is always auto-prepended by the
+# server, so the actual run count is STRATEGY_COUNT + 1). Update this when
+# strategyTypes in the curl payload below changes.
+STRATEGY_COUNT=4
+
+# Total seed cases — update when cases are added or removed from src/main/resources/seed/cases/.
+CASE_COUNT=30
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --label)
@@ -40,6 +48,10 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown argument: $1"; exit 1 ;;
   esac
 done
+
+if ! [[ "$REPETITIONS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Error: --repetitions must be a positive integer, got: '$REPETITIONS'"; exit 1
+fi
 
 command -v jq >/dev/null 2>&1 || { echo "jq is required but not installed. Run: brew install jq"; exit 1; }
 curl -sfS "$BASE_URL/actuator/health" >/dev/null 2>&1 \
@@ -68,9 +80,15 @@ echo "      Benchmark ID: $BENCHMARK_ID"
 echo "$CREATE_RESPONSE" | jq . > "$OUT_DIR/01_create.json"
 
 # ── 2. Execute benchmark (synchronous — may take several minutes) ─────────────
-echo "[2/3] Executing benchmark (runs all cases for each strategy — please wait)..."
+# Timeout = repetitions × (requested strategies + 1 for NONE baseline) × cases × 6s/call.
+# Clamped to [600, 7200]. Raise the per-call estimate if your provider runs slower.
+TOTAL_STRATEGIES=$(( STRATEGY_COUNT + 1 ))
+MAX_TIME=$(( REPETITIONS * TOTAL_STRATEGIES * CASE_COUNT * 6 ))
+if [[ $MAX_TIME -lt 600 ]]; then MAX_TIME=600; fi
+if [[ $MAX_TIME -gt 7200 ]]; then MAX_TIME=7200; fi
+echo "[2/3] Executing benchmark (timeout: ${MAX_TIME}s — please wait)..."
 EXECUTE_RESPONSE=$(curl -sfS -X POST "$BASE_URL/api/benchmarks/$BENCHMARK_ID/execute" \
-  --max-time 600)
+  --max-time $MAX_TIME)
 
 STATUS=$(echo "$EXECUTE_RESPONSE" | jq -r '.status')
 echo "      Status: $STATUS"

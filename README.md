@@ -188,11 +188,47 @@ Same 25-case suite, newer model, plus the new `RAG_CONTENT_FILTER` strategy that
 - The V1→V2 jump in `PROMPT_HARDENING` (10% → 0% aggregate, 50% → 0% on indirect injection) is **mostly a model effect**, not a defence improvement — `gemini-2.5-flash` is more conservative under hardened prompts than `2.0-flash`. The V1 table is left intact above so this is visible.
 - The keyword-based `INPUT_FILTER` still never actually blocks an input — `blockedCount` was 0 in both runs. Its higher attack-success rate vs. baseline is a real, repeated finding.
 - Lower latency under defence is still mostly a refusal-is-cheaper effect, not a speedup.
-- N=1 per cell in both runs. Sub-10% deltas are noise; only directional signals are real. Repetitions and confidence intervals remain a V2 follow-up (see [DESIGN.md §6](DESIGN.md#6-where-v2-goes)).
+- N=1 per cell in both runs. Sub-10% deltas are noise; only directional signals are real.
 
 > To reproduce V2:
 > ```bash
-> ./scripts/run_benchmark.sh --label gemini-2.5-flash
+> ./scripts/run_benchmark.sh --label gemini-2.5-flash --repetitions 1
+> ```
+
+### V3 — `gemini-2.5-flash`, five strategies, 30 cases, N=5 repetitions (2026-04-30)
+
+Expanded suite (15 attack + 15 benign) adds five advanced attack cases: Base64-obfuscated injection, multilingual (German), semantic roleplay bypass, markdown separator injection, and a semantic indirect injection via RAG that uses no explicit override keywords.
+
+**Mean attack success rate across N=5 repetitions per strategy:**
+
+| Strategy | ASR mean ↓ | ASR stddev | FPR mean | FPR stddev | Refusal mean | Latency mean (ms) |
+|---|---|---|---|---|---|---|
+| `NONE` (baseline) | 8% | ±7.5% | 0% | 0% | 0% | 1744 |
+| `INPUT_FILTER` | 16% | ±4.9% | 0% | 0% | 21% | 1921 |
+| `INPUT_OUTPUT` | 14% | ±4.9% | 0% | 0% | 22% | 1859 |
+| `PROMPT_HARDENING` | 8% | ±4.0% | 1.3% | ±2.7% | 30% | 1352 |
+| `RAG_CONTENT_FILTER` | 20% | ±6.3% | 0% | 0% | 21% | 1779 |
+
+**Indirect-injection-only breakdown** (CASE-008, CASE-009, CASE-015 — N=3 cases):
+
+| Strategy | Indirect-injection ASR |
+|---|---|
+| `NONE` | 0% |
+| `INPUT_FILTER` | 50% |
+| `INPUT_OUTPUT` | 50% |
+| `PROMPT_HARDENING` | 50% |
+| `RAG_CONTENT_FILTER` | **100%** |
+
+**How to read V3** (more in [DESIGN.md §4](DESIGN.md#4-reading-the-numbers)):
+
+- **`RAG_CONTENT_FILTER` regresses on indirect injection** — 100% vs 0% for `NONE`. Both indirect-injection cases in this run (CASE-008, CASE-009) use doc-3 which contains explicit override keywords and *is* flagged by the regex analyzer. Under `NONE`, the model ignores doc-3's injected instructions. Under `RAG_CONTENT_FILTER`, the document is wrapped in `<UNTRUSTED_DOCUMENT>` markers with a preamble — but despite the warning, the model appears to read the flagged content more carefully and comply with its instructions. The wrapping that is supposed to neutralise the injection instead draws the model's attention to it. Note: the third indirect-injection case (CASE-015/doc-4) uses semantic framing with no override keywords; the regex analyzer does not flag it, so it passes through unchanged under `RAG_CONTENT_FILTER` — its contribution to the regression is zero. The regression comes entirely from the wrap backfiring on CASE-008/009.
+- **Defences no longer outperform baseline** on aggregate ASR. The five new cases (obfuscated, multilingual, semantic) are harder for all strategies including the base model. `NONE` at 8% is not significantly better than `INPUT_FILTER` at 16% given the ASR stddev of ±7.5% — the difference is inside the noise floor.
+- **`PROMPT_HARDENING` introduces a false positive rate** (1.3% ± 2.7%) for the first time across any run. Small sample, but worth tracking.
+- With N=5 and 15 attack cases, the 95% confidence interval on a rate of 0.08 is roughly ±6% — wide enough that only differences larger than ~12 percentage points are statistically meaningful here.
+
+> To reproduce V3 (takes ~75 minutes on `gemini-2.5-flash`):
+> ```bash
+> ./scripts/run_benchmark.sh --label gemini-2.5-flash --repetitions 5
 > ```
 
 ## Metrics Explained
